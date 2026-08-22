@@ -1,3 +1,4 @@
+import express from 'express';
 import TelegramBot from 'node-telegram-bot-api';
 
 const TOKEN = "8753920376:AAEXJenUZbM-GqAY2rI-oA-LDVgThBFRJhI"; 
@@ -156,7 +157,7 @@ bot.on('message', async (msg) => {
       `📱 Tel: +998 (90) 621-44-55\n` +
       `💬 Telegram: @Intellekt_Admin\n` +
       `📍 Manzil: Andijon viloyati, Baliqchi tumani\n` 
-     ,
+      ,
       { parse_mode: 'HTML', ...mainKeyboard(chatId) }
     );
   }
@@ -184,7 +185,6 @@ bot.on('message', async (msg) => {
 
     let inlineButtons = results.map(c => [{ text: `🎓 ${c.title}`, callback_data: `course_${c.id}` }]);
     
-    // Qidiruvdan so'ng asosiy menyu yo'qolib qolmasligi uchun xabar va menyuni alohida yuboramiz
     await bot.sendMessage(chatId, `🔍 <b>Topilgan kurslar (${results.length} ta):</b>`, {
       parse_mode: 'HTML',
       reply_markup: { inline_keyboard: inlineButtons }
@@ -478,7 +478,7 @@ bot.on('callback_query', async (query) => {
   }
 });
 
-const express = require('express');
+// Express serverini ulash (Render portini tinglash uchun):
 const app = express();
 const PORT = process.env.PORT || 3000;
 
