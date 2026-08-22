@@ -1,8 +1,10 @@
 import express from 'express';
 import TelegramBot from 'node-telegram-bot-api';
+import https from 'https';
 
 const TOKEN = "8753920376:AAEXJenUZbM-GqAY2rI-oA-LDVgThBFRJhI"; 
 const ADMIN_ID = 5631424867;
+const RENDER_URL = "https://intellect-bot-ikul.onrender.com"; // Botingizning Render havolasi
 
 const bot = new TelegramBot(TOKEN, {
   polling: {
@@ -501,6 +503,15 @@ app.get('/', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
+  
+  // SERVERNI UXLATMASLIK UCHUN AVTOMATIK PING (Har 10 daqiqada o'ziga so'rov yuboradi)
+  setInterval(() => {
+    https.get(RENDER_URL, (res) => {
+      console.log('🔄 Server faol ushlab turildi (Keep-Alive Ping)');
+    }).on('error', (err) => {
+      console.error('Ping xatoligi:', err.message);
+    });
+  }, 10 * 60 * 1000); 
 });
 
 console.log('🚀 Intellekt Boti muvaffaqiyatli ishga tushdi...');
