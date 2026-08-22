@@ -1,10 +1,11 @@
 import express from 'express';
 import TelegramBot from 'node-telegram-bot-api';
 import https from 'https';
+import fs from 'fs';
 
 const TOKEN = "8753920376:AAEXJenUZbM-GqAY2rI-oA-LDVgThBFRJhI"; 
 const ADMIN_ID = 5631424867;
-const RENDER_URL = "https://intellect-bot-ikul.onrender.com"; // Botingizning Render havolasi
+const RENDER_URL = "https://intellect-bot-ikul.onrender.com";
 
 const bot = new TelegramBot(TOKEN, {
   polling: {
@@ -28,18 +29,63 @@ function escapeHTML(str = '') {
     .replace(/>/g, '&gt;');
 }
 
-let courses = [
-  {
-    id: 1,
-    title: "Node.js va Telegram Botlar",
-    teacher: "Jasur Rahmatov",
-    description: "Noldan professional botlar yaratish va serverga joylash kursi.",
-    price: "250,000 so'm",
-    videos: []
-  }
-];
+// -------------------------------------------------------------
+// FAYLLARDAN MA'LUMOT O'QISH VA SAQLASH (XOTIRA)
+// -------------------------------------------------------------
+const COURSES_FILE = './courses.json';
+const USERS_FILE = './users.json';
 
-let users = new Set();
+function loadCourses() {
+  try {
+    if (fs.existsSync(COURSES_FILE)) {
+      const data = fs.readFileSync(COURSES_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.error("Kurslarni o'qishda xato:", e);
+  }
+  return [
+    {
+      id: 1,
+      title: "Node.js va Telegram Botlar",
+      teacher: "Jasur Rahmatov",
+      description: "Noldan professional botlar yaratish va serverga joylash kursi.",
+      price: "250,000 so'm",
+      videos: []
+    }
+  ];
+}
+
+function saveCoursesData() {
+  try {
+    fs.writeFileSync(COURSES_FILE, JSON.stringify(courses, null, 2), 'utf8');
+  } catch (e) {
+    console.error("Kurslarni saqlashda xato:", e);
+  }
+}
+
+function loadUsers() {
+  try {
+    if (fs.existsSync(USERS_FILE)) {
+      const data = fs.readFileSync(USERS_FILE, 'utf8');
+      return new Set(JSON.parse(data));
+    }
+  } catch (e) {
+    console.error("Foydalanuvchilarni o'qishda xato:", e);
+  }
+  return new Set();
+}
+
+function saveUsersData() {
+  try {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(Array.from(users), null, 2), 'utf8');
+  } catch (e) {
+    console.error("Foydalanuvchilarni saqlashda xato:", e);
+  }
+}
+
+let courses = loadCourses();
+let users = loadUsers();
 let userSteps = {};
 let tempCourseData = {};
 let tempMessages = {};
@@ -113,7 +159,10 @@ bot.on('message', async (msg) => {
   const msgId = msg.message_id;
   const step = userSteps[chatId];
 
-  users.add(chatId);
+  if (!users.has(chatId)) {
+    users.add(chatId);
+    saveUsersData();
+  }
 
   if (step) {
     saveTempMsg(chatId, msgId);
@@ -269,6 +318,8 @@ bot.on('message', async (msg) => {
       };
 
       courses.push(newCourse);
+      saveCoursesData(); // FAYLGA SAQLASH
+
       await clearTempMessages(chatId);
 
       delete userSteps[chatId];
@@ -306,6 +357,8 @@ bot.on('message', async (msg) => {
 
       if (course) {
         course[field] = (field === 'price' && text === '⏭ O\'tkazib yuborish (Tekinga)') ? 'Bepul' : text;
+        saveCoursesData(); // FAYLGA SAQLASH
+
         await clearTempMessages(chatId);
         delete userSteps[chatId];
         delete tempCourseData[chatId];
@@ -335,6 +388,8 @@ bot.on('message', async (msg) => {
           fileId: videoFileId,
           caption: msg.caption || ''
         });
+
+        saveCoursesData(); // FAYLGA SAQLASH
 
         await clearTempMessages(chatId);
         delete userSteps[chatId];
@@ -434,6 +489,8 @@ bot.on('callback_query', async (query) => {
   if (data.startsWith('deletecourse_')) {
     const courseId = parseInt(data.split('_')[1]);
     courses = courses.filter(c => c.id !== courseId);
+    saveCoursesData(); // FAYLGA SAQLASH
+
     try { await bot.deleteMessage(chatId, query.message.message_id); } catch (e) {}
     bot.sendMessage(chatId, "✅ Kurs muvaffaqiyatli o'chirib tashlandi!", adminKeyboard);
   }
