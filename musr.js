@@ -19,7 +19,7 @@ app.listen(PORT, () => {
 // -------------------------------------------------------------
 // BOT SOZLAMALARI VA ADMINLAR
 // -------------------------------------------------------------
-const TOKEN = "8633792323:AAEQG7B18CT525-NmxL-LJ7wCQJ9Zc4ctIY"; 
+const TOKEN = "8753920376:AAEXJenUZbM-GqAY2rI-oA-LDVgThBFRJhI"; 
 // Ikkala admin ID si ro'yxatga olindi:
 const ADMIN_IDS = [8299255756, 5631424867];
 const REQUIRED_CHANNEL = "@intelekt_oquv_markazi";
