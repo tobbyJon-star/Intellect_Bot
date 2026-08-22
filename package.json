@@ -1,10 +1,17 @@
 {
-  "name": "education-bot",
+  "name": "intellect-bot",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Intellect Ta'lim Markazi Telegram Boti",
   "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
   "dependencies": {
-    "node-telegram-bot-api": "^0.66.0",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "node-telegram-bot-api": "^0.66.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
