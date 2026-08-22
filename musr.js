@@ -79,6 +79,16 @@ const cancelKeyboard = {
   }
 };
 
+const priceKeyboard = {
+  reply_markup: {
+    keyboard: [
+      ['⏭ O\'tkazib yuborish (Tekinga)'],
+      ['❌ Bekor qilish']
+    ],
+    resize_keyboard: true
+  }
+};
+
 async function clearTempMessages(chatId) {
   if (tempMessages[chatId] && tempMessages[chatId].length > 0) {
     for (let msgId of tempMessages[chatId]) {
@@ -156,8 +166,7 @@ bot.on('message', async (msg) => {
       `📞 <b>Biz bilan bog'lanish:</b>\n\n` +
       `📱 Tel: +998 (90) 621-44-55\n` +
       `💬 Telegram: @Intellekt_Admin\n` +
-      `📍 Manzil: Andijon viloyati, Baliqchi tumani\n` 
-      ,
+      `📍 Manzil: Andijon viloyati, Baliqchi tumani\n`,
       { parse_mode: 'HTML', ...mainKeyboard(chatId) }
     );
   }
@@ -239,13 +248,14 @@ bot.on('message', async (msg) => {
       tempCourseData[chatId].description = text;
       userSteps[chatId] = 'ADD_PRICE';
 
-      let sent = await bot.sendMessage(chatId, "4️⃣ <b>Kurs narxini kiriting (Masalan: 300,000 so'm):</b>", { parse_mode: 'HTML', ...cancelKeyboard });
+      let sent = await bot.sendMessage(chatId, "4️⃣ <b>Kurs narxini kiriting (yoki tugma orqali o'tkazib yuboring):</b>", { parse_mode: 'HTML', ...priceKeyboard });
       saveTempMsg(chatId, sent.message_id);
       return;
     }
 
     if (step === 'ADD_PRICE') {
-      tempCourseData[chatId].price = text;
+      const coursePrice = text === '⏭ O\'tkazib yuborish (Tekinga)' ? 'Bepul' : text;
+      tempCourseData[chatId].price = coursePrice;
 
       const newCourse = {
         id: courses.length > 0 ? Math.max(...courses.map(c => c.id)) + 1 : 1,
@@ -293,7 +303,7 @@ bot.on('message', async (msg) => {
       const course = courses.find(c => c.id === courseId);
 
       if (course) {
-        course[field] = text;
+        course[field] = (field === 'price' && text === '⏭ O\'tkazib yuborish (Tekinga)') ? 'Bepul' : text;
         await clearTempMessages(chatId);
         delete userSteps[chatId];
         delete tempCourseData[chatId];
@@ -419,7 +429,6 @@ bot.on('callback_query', async (query) => {
     });
   }
 
-  // Admin: Kursni o'chirish
   if (data.startsWith('deletecourse_')) {
     const courseId = parseInt(data.split('_')[1]);
     courses = courses.filter(c => c.id !== courseId);
@@ -427,7 +436,6 @@ bot.on('callback_query', async (query) => {
     bot.sendMessage(chatId, "✅ Kurs muvaffaqiyatli o'chirib tashlandi!", adminKeyboard);
   }
 
-  // Admin: Kursni tahrirlash menyusi
   if (data.startsWith('editcourse_')) {
     const courseId = parseInt(data.split('_')[1]);
     const course = courses.find(c => c.id === courseId);
@@ -453,12 +461,17 @@ bot.on('callback_query', async (query) => {
     userSteps[chatId] = `EDIT_FIELD_${field}`;
 
     let promptText = "";
+    let activeKeyboard = cancelKeyboard;
+
     if (field === 'title') promptText = "Yangi kurs nomini kiriting:";
     if (field === 'teacher') promptText = "Yangi ustoz F.I.SH.ni kiriting:";
     if (field === 'description') promptText = "Yangi kurs tavsifini kiriting:";
-    if (field === 'price') promptText = "Yangi kurs narxini kiriting:";
+    if (field === 'price') {
+      promptText = "Yangi kurs narxini kiriting (yoki tugma orqali o'tkazib yuboring):";
+      activeKeyboard = priceKeyboard;
+    }
 
-    let sent = await bot.sendMessage(chatId, promptText, cancelKeyboard);
+    let sent = await bot.sendMessage(chatId, promptText, activeKeyboard);
     saveTempMsg(chatId, sent.message_id);
   }
 
@@ -478,7 +491,7 @@ bot.on('callback_query', async (query) => {
   }
 });
 
-// Express serverini ulash (Render portini tinglash uchun):
+// Express serveri (Render uchun)
 const app = express();
 const PORT = process.env.PORT || 3000;
 
