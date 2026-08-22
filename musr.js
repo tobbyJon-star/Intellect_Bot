@@ -1,30 +1,39 @@
 import TelegramBot from 'node-telegram-bot-api';
 import fs from 'fs';
-import express from 'express'; // Render uchun Express server
+import express from 'express';
+import https from 'https';
 
-// -------------------------------------------------------------
-// RENDER UCHUN PORT BINDING
-// -------------------------------------------------------------
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Render havolangiz (Server uxlamasligi uchun)
+const RENDER_URL = "https://intellect-bot-ikul.onrender.com";
+
 app.get('/', (req, res) => {
-  res.send('Bot muvaffaqiyatli ishlamoqda!');
+  res.send('Intellect Bot muvaffaqiyatli ishlamoqda!');
 });
 
 app.listen(PORT, () => {
   console.log(`Server ${PORT}-portda ishga tushdi.`);
+
+  // -------------------------------------------------------------
+  // SERVERNI UXALASHGA YO'L QO'YMAYDIGAN AVTOMATIK PING (Har 10 daqiqada)
+  // -------------------------------------------------------------
+  setInterval(() => {
+    if (RENDER_URL) {
+      https.get(RENDER_URL, (res) => {
+        console.log('🔄 Server faol ushlab turildi (Keep-Alive Ping)');
+      }).on('error', (err) => {
+        console.error('Ping xatoligi:', err.message);
+      });
+    }
+  }, 10 * 60 * 1000);
 });
 
-// -------------------------------------------------------------
-// BOT SOZLAMALARI VA ADMINLAR
-// -------------------------------------------------------------
-const TOKEN = "8753920376:AAGUONfs4dmXPy-EjsaTYtZ8ZLgaBPkDiJc"; 
-// Ikkala admin ID si ro'yxatga olindi:
+const TOKEN = process.env.BOT_TOKEN || "8753920376:AAGUONfs4dmXPy-EjsaTYtZ8ZLgaBPkDiJc"; 
 const ADMIN_IDS = [8299255756, 5631424867];
 const REQUIRED_CHANNEL = "@intelekt_oquv_markazi";
 
-// Admin ekanligini tekshirish uchun yordamchi funksiya
 function isAdmin(chatId) {
   return ADMIN_IDS.includes(chatId);
 }
@@ -50,23 +59,16 @@ const bot = new TelegramBot(TOKEN, {
   polling: {
     interval: 500,
     autoStart: true,
-    params: {
-      timeout: 30
-    }
+    params: { timeout: 30 }
   },
   request: {
-    agentOptions: {
-      keepAlive: true,
-      keepAliveMsecs: 10000
-    },
+    agentOptions: { keepAlive: true, keepAliveMsecs: 10000 },
     timeout: 30000
   }
 });
 
 bot.on('polling_error', (error) => {
-  if (error.code === 'EFATAL' || error.message?.includes('fetch failed')) {
-    return;
-  }
+  if (error.code === 'EFATAL' || error.message?.includes('fetch failed')) return;
   console.log('Polling xabari:', error.message || error);
 });
 
@@ -296,23 +298,20 @@ bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text || '';
   const msgId = msg.message_id;
-  const step = userSteps[chatId];
 
-  if (step && text !== '❌ Bekor qilish') {
-    saveTempMsg(chatId, msgId);
-  }
-
-  if (text === '❌ Bekor qilish') {
+  if (text === '❌ Bekor qilish' || text === '/start' || text === '◀️ Bosh Menyu') {
     await clearTempMessages(chatId);
     delete userSteps[chatId];
     delete tempCourseData[chatId];
     delete tempRegData[chatId];
-    return bot.sendMessage(chatId, "Jarayon bekor qilindi.", activeSessions[chatId] ? (isAdmin(chatId) ? adminKeyboard : mainKeyboard(chatId)) : authStartKeyboard);
-  }
 
-  if (text === '/start' || text === '◀️ Bosh Menyu') {
-    await clearTempMessages(chatId);
-    delete userSteps[chatId];
+    if (text === '❌ Bekor qilish') {
+      return bot.sendMessage(
+        chatId, 
+        "Jarayon bekor qilindi.", 
+        activeSessions[chatId] ? (isAdmin(chatId) ? adminKeyboard : mainKeyboard(chatId)) : authStartKeyboard
+      );
+    }
 
     if (!activeSessions[chatId]) {
       return bot.sendMessage(
@@ -323,15 +322,19 @@ bot.on('message', async (msg) => {
     }
 
     const isSubbed = await checkSub(chatId);
-    if (!isSubbed) {
-      return sendSubMessage(chatId);
-    }
+    if (!isSubbed) return sendSubMessage(chatId);
 
     return bot.sendMessage(
       chatId,
       `🌟 <b>Xush kelibsiz!</b>\n\nKerakli bo'limni tanlang:`,
       { parse_mode: 'HTML', ...mainKeyboard(chatId) }
     );
+  }
+
+  const step = userSteps[chatId];
+
+  if (step) {
+    saveTempMsg(chatId, msgId);
   }
 
   if (text === '📝 Ro\'yxatdan o\'tish') {
@@ -437,13 +440,15 @@ bot.on('message', async (msg) => {
 
   if (step === 'LOGIN_NAME') {
     const accKey = text.trim().toLowerCase();
-    if (!userDataStore[accKey]) {
-      let sent = await bot.sendMessage(chatId, "❌ Bunday Ism-Familiya bilan akkaunt topilmadi. Qaytadan kiriting:", cancelKeyboard);
+    const foundKey = Object.keys(userDataStore).find(k => k === accKey || k === text.trim());
+
+    if (!foundKey) {
+      let sent = await bot.sendMessage(chatId, "❌ <b>Bunday Ism-Familiya bilan akkaunt topilmadi.</b>\n\nQaytadan kiriting yoki <b>❌ Bekor qilish</b> tugmasini bosing:", { parse_mode: 'HTML', ...cancelKeyboard });
       saveTempMsg(chatId, sent.message_id);
       return;
     }
 
-    tempRegData[chatId] = { loginKey: accKey };
+    tempRegData[chatId] = { loginKey: foundKey };
     userSteps[chatId] = 'LOGIN_PASS';
     let sent = await bot.sendMessage(chatId, "🔑 <b>Parolingizni kiriting:</b>", { parse_mode: 'HTML', ...cancelKeyboard });
     saveTempMsg(chatId, sent.message_id);
@@ -451,10 +456,10 @@ bot.on('message', async (msg) => {
   }
 
   if (step === 'LOGIN_PASS') {
-    const accKey = tempRegData[chatId].loginKey;
+    const accKey = tempRegData[chatId]?.loginKey;
     const userAcc = userDataStore[accKey];
 
-    if (userAcc.password !== text) {
+    if (!userAcc || userAcc.password !== text) {
       let sent = await bot.sendMessage(chatId, "❌ <b>Noto'g'ri parol!</b> Qaytadan kiriting:", { parse_mode: 'HTML', ...cancelKeyboard });
       saveTempMsg(chatId, sent.message_id);
       return;
@@ -476,42 +481,12 @@ bot.on('message', async (msg) => {
     return bot.sendMessage(chatId, "🌟 <b>Xush kelibsiz!</b> Kerakli bo'limni tanlang:", mainKeyboard(chatId));
   }
 
-  if (isAdmin(chatId) && step === 'ADMIN_SEARCH_USER') {
-    delete userSteps[chatId];
-    await clearTempMessages(chatId);
-
-    const query = text.toLowerCase().trim();
-    const allUsers = Object.values(userDataStore);
-    const found = allUsers.filter(u => 
-      (u.fullName && u.fullName.toLowerCase().includes(query)) ||
-      (u.phone && u.phone.includes(query)) ||
-      (u.role && u.role.toLowerCase().includes(query))
-    );
-
-    if (found.length === 0) {
-      return bot.sendMessage(chatId, "❌ Hech qanday foydalanuvchi topilmadi.", adminUsersMenuKeyboard);
-    }
-
-    let response = `🔍 <b>Qidiruv natijalari (${found.length} ta):</b>\n\n`;
-    found.forEach((u, idx) => {
-      response += `${idx + 1}. <b>${escapeHTML(u.fullName)}</b> (${u.role})\n` +
-                  `📱 Tel: <code>${u.phone}</code>\n` +
-                  `🎂 Yosh: ${u.age} | 👫 Jins: ${u.gender}\n` +
-                  `🎯 Soha: ${u.subject || 'Tanlanmagan'}\n` +
-                  `------------------------------\n`;
-    });
-
-    return bot.sendMessage(chatId, response, { parse_mode: 'HTML', ...adminUsersMenuKeyboard });
-  }
-
   if (!activeSessions[chatId]) {
     return bot.sendMessage(chatId, "⚠️ <b>Botdan foydalanish uchun avval ro'yxatdan o'ting!</b>", { parse_mode: 'HTML', ...authStartKeyboard });
   }
 
   const isSubbed = await checkSub(chatId);
-  if (!isSubbed) {
-    return sendSubMessage(chatId);
-  }
+  if (!isSubbed) return sendSubMessage(chatId);
 
   if (text === '📚 Barcha Kurslar') {
     await clearTempMessages(chatId);
@@ -533,28 +508,7 @@ bot.on('message', async (msg) => {
     return bot.sendMessage(chatId, `📞 <b>Bog'lanish:</b>\n📱 Tel: +998 (90) 621-44-55\n📍 Guruh: ${REQUIRED_CHANNEL}`, { parse_mode: 'HTML', ...mainKeyboard(chatId) });
   }
 
-  if (text === '🔍 Kurs Qidirish') {
-    await clearTempMessages(chatId);
-    userSteps[chatId] = 'SEARCH_COURSE';
-    let sent = await bot.sendMessage(chatId, "🔍 Kurs nomini yozing:", cancelKeyboard);
-    saveTempMsg(chatId, sent.message_id);
-    return;
-  }
-
-  if (step === 'SEARCH_COURSE') {
-    delete userSteps[chatId];
-    const results = courses.filter(c => c.title.toLowerCase().includes(text.toLowerCase()));
-    await clearTempMessages(chatId);
-
-    if (results.length === 0) return bot.sendMessage(chatId, "❌ Kurs topilmadi.", mainKeyboard(chatId));
-
-    let inlineButtons = results.map(c => [{ text: `🎓 ${c.title}`, callback_data: `course_${c.id}` }]);
-    return bot.sendMessage(chatId, `🔍 Topilgan kurslar:`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: inlineButtons } });
-  }
-
-  // -------------------------------------------------------------
-  // ADMIN PANEL BUYRUQLARI
-  // -------------------------------------------------------------
+  // ADMIN PANELI
   if (isAdmin(chatId)) {
     if (text === '⚙️ Admin Panel' || text === '◀️ Admin Panel') {
       await clearTempMessages(chatId);
@@ -595,80 +549,6 @@ bot.on('message', async (msg) => {
       });
 
       return bot.sendMessage(chatId, msgText, { parse_mode: 'HTML', ...adminUsersMenuKeyboard });
-    }
-
-    if (text === '🔍 Foydalanuvchi Qidirish') {
-      await clearTempMessages(chatId);
-      userSteps[chatId] = 'ADMIN_SEARCH_USER';
-      let sent = await bot.sendMessage(chatId, "🔍 Qidirmoqchi bo'lgan foydalanuvchining <b>Ism-Familiyasi</b> yoki <b>Telefon raqamini</b> kiriting:", { parse_mode: 'HTML', ...cancelKeyboard });
-      saveTempMsg(chatId, sent.message_id);
-      return;
-    }
-
-    if (text === '📊 Statistika') {
-      await clearTempMessages(chatId);
-      const allUsers = Object.values(userDataStore);
-      const students = allUsers.filter(u => u.role === "O'quvchi").length;
-      const teachers = allUsers.filter(u => u.role === "O'qituvchi").length;
-
-      return bot.sendMessage(
-        chatId,
-        `📊 <b>Platforma Statistikasi:</b>\n\n` +
-        `👤 Jami Foydalanuvchilar: <b>${allUsers.length} ta</b>\n` +
-        `👨‍🎓 O'quvchilar: <b>${students} ta</b>\n` +
-        `👨‍🏫 O'qituvchilar: <b>${teachers} ta</b>\n` +
-        `📚 Mavjud kurslar: <b>${courses.length} ta</b>`,
-        { parse_mode: 'HTML', ...adminKeyboard }
-      );
-    }
-
-    if (text === '➕ Yangi Kurs Qo\'shish') {
-      await clearTempMessages(chatId);
-      userSteps[chatId] = 'ADD_TITLE';
-      tempCourseData[chatId] = {};
-      let sent = await bot.sendMessage(chatId, "1️⃣ Kurs nomini kiriting:", cancelKeyboard);
-      saveTempMsg(chatId, sent.message_id);
-      return;
-    }
-
-    if (step === 'ADD_TITLE') {
-      tempCourseData[chatId].title = text;
-      userSteps[chatId] = 'ADD_TEACHER';
-      let sent = await bot.sendMessage(chatId, "2️⃣ Ustoz F.I.SH.ni kiriting:", cancelKeyboard);
-      saveTempMsg(chatId, sent.message_id);
-      return;
-    }
-
-    if (step === 'ADD_TEACHER') {
-      tempCourseData[chatId].teacher = text;
-      userSteps[chatId] = 'ADD_DESC';
-      let sent = await bot.sendMessage(chatId, "3️⃣ Kurs tavsifini kiriting:", cancelKeyboard);
-      saveTempMsg(chatId, sent.message_id);
-      return;
-    }
-
-    if (step === 'ADD_DESC') {
-      tempCourseData[chatId].description = text;
-      userSteps[chatId] = 'ADD_PRICE';
-      let sent = await bot.sendMessage(chatId, "4️⃣ Kurs narxini kiriting:", cancelKeyboard);
-      saveTempMsg(chatId, sent.message_id);
-      return;
-    }
-
-    if (step === 'ADD_PRICE') {
-      tempCourseData[chatId].price = text;
-      const newCourse = {
-        id: courses.length > 0 ? Math.max(...courses.map(c => c.id)) + 1 : 1,
-        ...tempCourseData[chatId],
-        videos: []
-      };
-      courses.push(newCourse);
-      saveCoursesData();
-
-      await clearTempMessages(chatId);
-      delete userSteps[chatId];
-      delete tempCourseData[chatId];
-      return bot.sendMessage(chatId, `✅ "${newCourse.title}" kursi qo'shildi!`, adminKeyboard);
     }
   }
 });
@@ -723,49 +603,17 @@ bot.on('callback_query', async (query) => {
 
     const welcomeText = 
       `🌟 <b>Xush kelibsiz, ${escapeHTML(userAcc ? userAcc.fullName : '')}!</b>\n\n` +
-      `Bizning <b>"Intellekt"</b> ta'lim oilamizga xush kelibsiz! Siz bilan birga bilim olish va yuksalishdan juda mamnunmiz. Kelajagingiz va rivojlanishingiz uchun qo'yilgan ushbu qadam qutlug' bo'lsin! 🚀\n\n` +
+      `Bizning <b>"Intellekt"</b> ta'lim oilamizga xush kelibsiz! 🚀\n\n` +
       `🎯 Tanlangan sohangiz: <b>${selectedSubject}</b>`;
 
     await bot.sendMessage(chatId, welcomeText, { parse_mode: 'HTML' });
 
-    // Yangi ro'yxatdan o'tganlar haqidagi bildirishnoma Har ikkala adminga ham boradi:
-    if (userAcc) {
-      const adminNotice = 
-        `🔔 <b>Yangi foydalanuvchi ro'yxatdan o'tdi!</b>\n\n` +
-        `👤 <b>Ismi:</b> ${escapeHTML(userAcc.fullName)}\n` +
-        `🎭 <b>Roli:</b> ${userAcc.role}\n` +
-        `🎂 <b>Yoshi:</b> ${userAcc.age}\n` +
-        `👫 <b>Jinsi:</b> ${userAcc.gender}\n` +
-        `📱 <b>Tel:</b> <code>${userAcc.phone}</code>\n` +
-        `🎯 <b>Tanlagan sohasi:</b> ${selectedSubject}`;
-
-      ADMIN_IDS.forEach(adminId => {
-        bot.sendMessage(adminId, adminNotice, { parse_mode: 'HTML' }).catch(() => {});
-      });
-    }
-
     delete tempRegData[chatId];
 
     const isSubbed = await checkSub(chatId);
-    if (!isSubbed) {
-      return sendSubMessage(chatId);
-    }
+    if (!isSubbed) return sendSubMessage(chatId);
 
     return bot.sendMessage(chatId, "👇 Kerakli bo'limni tanlang:", mainKeyboard(chatId));
-  }
-
-  if (data.startsWith('course_')) {
-    const courseId = parseInt(data.split('_')[1]);
-    const course = courses.find(c => c.id === courseId);
-
-    if (course) {
-      let infoText = `🎓 <b>${escapeHTML(course.title)}</b>\n\n` +
-                     `👨‍🏫 Ustoz: <b>${escapeHTML(course.teacher)}</b>\n` +
-                     `💵 Narxi: <b>${escapeHTML(course.price)}</b>\n` +
-                     `📝 Haqida: ${escapeHTML(course.description)}`;
-
-      bot.sendMessage(chatId, infoText, { parse_mode: 'HTML' });
-    }
   }
 });
 
