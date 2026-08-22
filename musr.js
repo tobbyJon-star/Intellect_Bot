@@ -155,8 +155,8 @@ bot.on('message', async (msg) => {
       `📞 <b>Biz bilan bog'lanish:</b>\n\n` +
       `📱 Tel: +998 (90) 123-45-67\n` +
       `💬 Telegram: @Intellekt_Admin\n` +
-      `📍 Manzil: Toshkent sh., Chilonzor tumani\n` +
-      `🌐 Sayt: www.intellekt-academy.uz`,
+      `📍 Manzil: Andijon viloyati, Baliqchi tumani\n` 
+     ,
       { parse_mode: 'HTML', ...mainKeyboard(chatId) }
     );
   }
