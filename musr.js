@@ -1,20 +1,40 @@
 import TelegramBot from 'node-telegram-bot-api';
 import fs from 'fs';
+import express from 'express'; // Render uchun Express server
 
+// -------------------------------------------------------------
+// RENDER UCHUN PORT BINDING
+// -------------------------------------------------------------
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+  res.send('Bot muvaffaqiyatli ishlamoqda!');
+});
+
+app.listen(PORT, () => {
+  console.log(`Server ${PORT}-portda ishga tushdi.`);
+});
+
+// -------------------------------------------------------------
+// BOT SOZLAMALARI VA ADMINLAR
+// -------------------------------------------------------------
 const TOKEN = "8633792323:AAEQG7B18CT525-NmxL-LJ7wCQJ9Zc4ctIY"; 
-const ADMIN_ID = 8299255756;
+// Ikkala admin ID si ro'yxatga olindi:
+const ADMIN_IDS = [8299255756, 5631424867];
 const REQUIRED_CHANNEL = "@intelekt_oquv_markazi";
 
-// -------------------------------------------------------------
-// TARMOQ VA UNHANDLED REJECTION XATOLARINI USHLASH (S JIM USHLASH)
-// -------------------------------------------------------------
+// Admin ekanligini tekshirish uchun yordamchi funksiya
+function isAdmin(chatId) {
+  return ADMIN_IDS.includes(chatId);
+}
+
 process.on('uncaughtException', (err) => {
   if (err?.code === 'EFATAL' || err?.message?.includes('fetch failed')) return;
   console.error('Uncaught Exception:', err);
 });
 
 process.on('unhandledRejection', (reason) => {
-  // EFATAL va ConnectTimeoutError kabi vaqtinchalik tarmoq xatolarini yashirish
   if (
     reason?.code === 'EFATAL' || 
     reason?.name === 'FatalError' ||
@@ -26,15 +46,12 @@ process.on('unhandledRejection', (reason) => {
   console.error('Unhandled Rejection:', reason);
 });
 
-// -------------------------------------------------------------
-// BOTNI BARQAROR SOZLAMALAR BILAN ISHGA TUSHIRISH
-// -------------------------------------------------------------
 const bot = new TelegramBot(TOKEN, {
   polling: {
     interval: 500,
     autoStart: true,
     params: {
-      timeout: 30 // Telegram server bilan kutish vaqtini 30s ga uzaytirish
+      timeout: 30
     }
   },
   request: {
@@ -42,13 +59,13 @@ const bot = new TelegramBot(TOKEN, {
       keepAlive: true,
       keepAliveMsecs: 10000
     },
-    timeout: 30000 // Ulanish vaqtini 30 soniyagacha uzaytirish
+    timeout: 30000
   }
 });
 
 bot.on('polling_error', (error) => {
   if (error.code === 'EFATAL' || error.message?.includes('fetch failed')) {
-    return; // Tarmoq uzilganda konsolga ortiqcha qizil xatolar chiqarmaslik
+    return;
   }
   console.log('Polling xabari:', error.message || error);
 });
@@ -60,9 +77,6 @@ function escapeHTML(str = '') {
     .replace(/>/g, '&gt;');
 }
 
-// -------------------------------------------------------------
-// SOHALAR VA FANLAR
-// -------------------------------------------------------------
 const SUBJECTS = [
   "💻 IT va Dasturlash",
   "🎨 Grafik Dizayn & Motion",
@@ -72,9 +86,6 @@ const SUBJECTS = [
   "📱 SMM va Raqamli Marketing"
 ];
 
-// -------------------------------------------------------------
-// BAZA VA FAYLLAR
-// -------------------------------------------------------------
 const COURSES_FILE = './courses_db.json';
 const USERS_FILE = './users_db.json';
 
@@ -146,7 +157,7 @@ const mainKeyboard = (chatId) => {
     ['🔍 Kurs Qidirish', '📞 Bog\'lanish & Manzil']
   ];
 
-  if (chatId === ADMIN_ID) {
+  if (isAdmin(chatId)) {
     buttons.push(['⚙️ Admin Panel']);
   }
 
@@ -296,7 +307,7 @@ bot.on('message', async (msg) => {
     delete userSteps[chatId];
     delete tempCourseData[chatId];
     delete tempRegData[chatId];
-    return bot.sendMessage(chatId, "Jarayon bekor qilindi.", activeSessions[chatId] ? (chatId === ADMIN_ID ? adminKeyboard : mainKeyboard(chatId)) : authStartKeyboard);
+    return bot.sendMessage(chatId, "Jarayon bekor qilindi.", activeSessions[chatId] ? (isAdmin(chatId) ? adminKeyboard : mainKeyboard(chatId)) : authStartKeyboard);
   }
 
   if (text === '/start' || text === '◀️ Bosh Menyu') {
@@ -323,9 +334,6 @@ bot.on('message', async (msg) => {
     );
   }
 
-  // -------------------------------------------------------------
-  // RO'YXATDAN O'TISH BOSQICHLARI
-  // -------------------------------------------------------------
   if (text === '📝 Ro\'yxatdan o\'tish') {
     await clearTempMessages(chatId);
     userSteps[chatId] = 'REG_ROLE';
@@ -419,9 +427,6 @@ bot.on('message', async (msg) => {
     return sendSubjectSelection(chatId);
   }
 
-  // -------------------------------------------------------------
-  // LOGIN BOSQICHI
-  // -------------------------------------------------------------
   if (text === '🔑 Akkauntga kirish (Login)') {
     await clearTempMessages(chatId);
     userSteps[chatId] = 'LOGIN_NAME';
@@ -471,8 +476,7 @@ bot.on('message', async (msg) => {
     return bot.sendMessage(chatId, "🌟 <b>Xush kelibsiz!</b> Kerakli bo'limni tanlang:", mainKeyboard(chatId));
   }
 
-  // ADMIN FOYDALANUVCHILARNI QIDIRISH
-  if (chatId === ADMIN_ID && step === 'ADMIN_SEARCH_USER') {
+  if (isAdmin(chatId) && step === 'ADMIN_SEARCH_USER') {
     delete userSteps[chatId];
     await clearTempMessages(chatId);
 
@@ -509,9 +513,6 @@ bot.on('message', async (msg) => {
     return sendSubMessage(chatId);
   }
 
-  // -------------------------------------------------------------
-  // MENYU TUGMALARI
-  // -------------------------------------------------------------
   if (text === '📚 Barcha Kurslar') {
     await clearTempMessages(chatId);
     if (courses.length === 0) return bot.sendMessage(chatId, "Hozircha kurslar yo'q.", mainKeyboard(chatId));
@@ -554,7 +555,7 @@ bot.on('message', async (msg) => {
   // -------------------------------------------------------------
   // ADMIN PANEL BUYRUQLARI
   // -------------------------------------------------------------
-  if (chatId === ADMIN_ID) {
+  if (isAdmin(chatId)) {
     if (text === '⚙️ Admin Panel' || text === '◀️ Admin Panel') {
       await clearTempMessages(chatId);
       delete userSteps[chatId];
@@ -672,9 +673,6 @@ bot.on('message', async (msg) => {
   }
 });
 
-// -------------------------------------------------------------
-// INLINE CALLBACK HANDLER
-// -------------------------------------------------------------
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
@@ -730,6 +728,7 @@ bot.on('callback_query', async (query) => {
 
     await bot.sendMessage(chatId, welcomeText, { parse_mode: 'HTML' });
 
+    // Yangi ro'yxatdan o'tganlar haqidagi bildirishnoma Har ikkala adminga ham boradi:
     if (userAcc) {
       const adminNotice = 
         `🔔 <b>Yangi foydalanuvchi ro'yxatdan o'tdi!</b>\n\n` +
@@ -740,7 +739,9 @@ bot.on('callback_query', async (query) => {
         `📱 <b>Tel:</b> <code>${userAcc.phone}</code>\n` +
         `🎯 <b>Tanlagan sohasi:</b> ${selectedSubject}`;
 
-      bot.sendMessage(ADMIN_ID, adminNotice, { parse_mode: 'HTML' }).catch(() => {});
+      ADMIN_IDS.forEach(adminId => {
+        bot.sendMessage(adminId, adminNotice, { parse_mode: 'HTML' }).catch(() => {});
+      });
     }
 
     delete tempRegData[chatId];
