@@ -153,7 +153,7 @@ bot.on('message', async (msg) => {
     return bot.sendMessage(
       chatId,
       `📞 <b>Biz bilan bog'lanish:</b>\n\n` +
-      `📱 Tel: +998 (90) 123-45-67\n` +
+      `📱 Tel: +998 (90) 621-44-55\n` +
       `💬 Telegram: @Intellekt_Admin\n` +
       `📍 Manzil: Andijon viloyati, Baliqchi tumani\n` 
      ,
