@@ -651,7 +651,7 @@ bot.on('callback_query', async (query) => {
     try { await bot.deleteMessage(chatId, query.message.message_id); } catch (e) {}
 
     const welcomeText = 
-      `🌟 <b>Xush kelibsiz, ${escapeHTML(userAcc ? userAcc.fullName : '')}!</b>\n\n` +
+      `🌟 Xush kelibsiz, ${escapeHTML(userAcc ? userAcc.fullName : '')}!\n\n` +
       `Bizning <b>"Intellekt"</b> ta'lim oilamizga xush kelibsiz! 🚀\n\n` +
       `🎯 Tanlangan sohangiz: <b>${selectedSubject}</b>`;
 
