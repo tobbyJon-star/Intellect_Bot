@@ -5,7 +5,6 @@ import https from 'https';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
 const RENDER_URL = "https://intellect-bot-ikul.onrender.com";
 
 app.get('/', (req, res) => {
@@ -31,7 +30,7 @@ const ADMIN_IDS = [8299255756, 5631424867];
 const REQUIRED_CHANNEL = "@intelekt_oquv_markazi";
 
 function isAdmin(chatId) {
-  return ADMIN_IDS.includes(chatId);
+  return ADMIN_IDS.includes(Number(chatId));
 }
 
 process.on('uncaughtException', (err) => {
@@ -141,7 +140,6 @@ let tempRegData = {};
 let tempCourseData = {};
 let tempMessages = {};
 
-// ✅ chatId orqali avto-login qilingan foydalanuvchini topish funksiyasi
 function getUserByChatId(chatId) {
   const allUsers = Object.values(userDataStore);
   return allUsers.find(u => u.chatId === chatId);
@@ -154,53 +152,35 @@ function validatePassword(pass) {
   return letters >= 4 && digits >= 4;
 }
 
+// Keyboards
 const mainKeyboard = (chatId) => {
   const buttons = [
     ['📚 Barcha Kurslar', '👨‍🏫 Ustozlarimiz'],
     ['🔍 Kurs Qidirish', '📞 Bog\'lanish & Manzil']
   ];
-
   if (isAdmin(chatId)) {
     buttons.push(['⚙️ Admin Panel']);
   }
-
-  return {
-    reply_markup: {
-      keyboard: buttons,
-      resize_keyboard: true
-    }
-  };
+  return { reply_markup: { keyboard: buttons, resize_keyboard: true } };
 };
 
 const roleKeyboard = {
   reply_markup: {
-    keyboard: [
-      ['👨‍🎓 O\'quvchi', '👨‍🏫 O\'qituvchi'],
-      ['❌ Bekor qilish']
-    ],
+    keyboard: [['👨‍🎓 O\'quvchi', '👨‍🏫 O\'qituvchi'], ['❌ Bekor qilish']],
     resize_keyboard: true
   }
 };
 
 const phoneShareKeyboard = {
   reply_markup: {
-    keyboard: [
-      [{ text: "📱 Telefon raqamimni yuborish", request_contact: true }],
-      ['❌ Bekor qilish']
-    ],
-    resize_keyboard: true,
-    one_time_keyboard: true
+    keyboard: [[{ text: "📱 Telefon raqamimni yuborish", request_contact: true }], ['❌ Bekor qilish']],
+    resize_keyboard: true, one_time_keyboard: true
   }
 };
 
 const genderInlineKeyboard = {
   reply_markup: {
-    inline_keyboard: [
-      [
-        { text: "👨 Erkak", callback_data: "gender_Erkak" },
-        { text: "👩 Ayol", callback_data: "gender_Ayol" }
-      ]
-    ]
+    inline_keyboard: [[{ text: "👨 Erkak", callback_data: "gender_Erkak" }, { text: "👩 Ayol", callback_data: "gender_Ayol" }]]
   }
 };
 
@@ -219,28 +199,17 @@ const adminKeyboard = {
 
 const adminUsersMenuKeyboard = {
   reply_markup: {
-    keyboard: [
-      ['📋 Barcha Foydalanuvchilar Listi', '🔍 Foydalanuvchi Qidirish'],
-      ['◀️ Admin Panel']
-    ],
+    keyboard: [['📋 Barcha Foydalanuvchilar Listi', '🔍 Foydalanuvchi Qidirish'], ['◀️ Admin Panel']],
     resize_keyboard: true
   }
 };
 
 const cancelKeyboard = {
-  reply_markup: {
-    keyboard: [['❌ Bekor qilish']],
-    resize_keyboard: true
-  }
+  reply_markup: { keyboard: [['❌ Bekor qilish']], resize_keyboard: true }
 };
 
 const authStartKeyboard = {
-  reply_markup: {
-    keyboard: [
-      ['📝 Ro\'yxatdan o\'tish', '🔑 Akkauntga kirish (Login)']
-    ],
-    resize_keyboard: true
-  }
+  reply_markup: { keyboard: [['📝 Ro\'yxatdan o\'tish', '🔑 Akkauntga kirish (Login)']], resize_keyboard: true }
 };
 
 async function checkSub(chatId) {
@@ -271,9 +240,7 @@ async function sendSubMessage(chatId) {
 async function clearTempMessages(chatId) {
   if (tempMessages[chatId] && tempMessages[chatId].length > 0) {
     for (let msgId of tempMessages[chatId]) {
-      try {
-        await bot.deleteMessage(chatId, msgId);
-      } catch (e) {}
+      try { await bot.deleteMessage(chatId, msgId); } catch (e) {}
     }
     tempMessages[chatId] = [];
   }
@@ -285,24 +252,22 @@ function saveTempMsg(chatId, msgId) {
 }
 
 async function sendSubjectSelection(chatId) {
-  const inlineButtons = SUBJECTS.map((sub, index) => [
-    { text: sub, callback_data: `select_subject_${index}` }
-  ]);
-
+  const inlineButtons = SUBJECTS.map((sub, index) => [{ text: sub, callback_data: `select_subject_${index}` }]);
   return bot.sendMessage(chatId, "🎯 <b>Qaysi soha yoki fan sizni ko'proq qiziqtiradi?</b>\n\nQuyidagilardan birini tanlang:", {
     parse_mode: 'HTML',
     reply_markup: { inline_keyboard: inlineButtons }
   });
 }
 
+// BOT MESSAGE HANDLER
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text || '';
   const msgId = msg.message_id;
 
-  // Telegram ID bo'yicha bazadan foydalanuvchini tekshiramiz
   const savedUser = getUserByChatId(chatId);
 
+  // START VA BEKOR QILISH
   if (text === '❌ Bekor qilish' || text === '/start' || text === '◀️ Bosh Menyu') {
     await clearTempMessages(chatId);
     delete userSteps[chatId];
@@ -317,7 +282,6 @@ bot.on('message', async (msg) => {
       );
     }
 
-    // ✅ Agar foydalanuvchi bazada yo'q bo'lsa: Ro'yxatdan o'tish menyusi
     if (!savedUser) {
       return bot.sendMessage(
         chatId,
@@ -326,7 +290,6 @@ bot.on('message', async (msg) => {
       );
     }
 
-    // ✅ Agar foydalanuvchi bazada bor bo'lsa: Qayta login so'ramasdan direkt kutib oladi
     const isSubbed = await checkSub(chatId);
     if (!isSubbed) return sendSubMessage(chatId);
 
@@ -343,6 +306,7 @@ bot.on('message', async (msg) => {
     saveTempMsg(chatId, msgId);
   }
 
+  // RO'YXATDAN O'TISH
   if (text === '📝 Ro\'yxatdan o\'tish') {
     await clearTempMessages(chatId);
     userSteps[chatId] = 'REG_ROLE';
@@ -358,7 +322,6 @@ bot.on('message', async (msg) => {
       saveTempMsg(chatId, sent.message_id);
       return;
     }
-
     tempRegData[chatId].role = text.includes("O'quvchi") ? "O'quvchi" : "O'qituvchi";
     userSteps[chatId] = 'REG_NAME';
     let sent = await bot.sendMessage(chatId, "👤 <b>Ism va Familiyangizni kiriting:</b>\n<i>(Masalan: Ali Valiyev)</i>", { parse_mode: 'HTML', ...cancelKeyboard });
@@ -382,7 +345,6 @@ bot.on('message', async (msg) => {
     }
     tempRegData[chatId].age = text;
     userSteps[chatId] = 'REG_GENDER';
-    
     let sent = await bot.sendMessage(chatId, "👫 <b>Jinsingizni tanlang:</b>", { parse_mode: 'HTML', ...genderInlineKeyboard });
     saveTempMsg(chatId, sent.message_id);
     return;
@@ -390,18 +352,12 @@ bot.on('message', async (msg) => {
 
   if (step === 'REG_PHONE') {
     let phoneNum = msg.contact ? msg.contact.phone_number : text.trim();
-
-    if (!phoneNum.startsWith('+')) {
-      phoneNum = '+' + phoneNum;
-    }
-
+    if (!phoneNum.startsWith('+')) phoneNum = '+' + phoneNum;
     tempRegData[chatId].phone = phoneNum;
     userSteps[chatId] = 'REG_PASSWORD';
-
     let sent = await bot.sendMessage(
       chatId,
-      "🔑 <b>Akkaunt uchun parol o'ylab toping:</b>\n\n" +
-      "⚠️ <i>Parol kamida 8 ta belgidan iborat bo'lishi hamda kamida 4 ta harf va 4 ta raqamdan tashkil topishi kerak!</i>",
+      "🔑 <b>Akkaunt uchun parol o'ylab toping:</b>\n\n⚠️ <i>Parol kamida 8 ta belgidan iborat bo'lishi hamda kamida 4 ta harf va 4 ta raqamdan tashkil topishi kerak!</i>",
       { parse_mode: 'HTML', ...cancelKeyboard }
     );
     saveTempMsg(chatId, sent.message_id);
@@ -418,22 +374,21 @@ bot.on('message', async (msg) => {
       saveTempMsg(chatId, sent.message_id);
       return;
     }
-
     const accKey = tempRegData[chatId].fullName.toLowerCase();
     tempRegData[chatId].password = text;
-    tempRegData[chatId].chatId = chatId; // ✅ Foydalanuvchi telegram chatId'si doimiy saqlanadi
+    tempRegData[chatId].chatId = chatId;
     tempRegData[chatId].registeredAt = Date.now();
     tempRegData[chatId].subject = null;
 
     userDataStore[accKey] = tempRegData[chatId];
-    saveUsersData(); // JSON faylga yozildi (doimiy saqlanadi)
+    saveUsersData();
 
     await clearTempMessages(chatId);
     delete userSteps[chatId];
-
     return sendSubjectSelection(chatId);
   }
 
+  // LOGIN
   if (text === '🔑 Akkauntga kirish (Login)') {
     await clearTempMessages(chatId);
     userSteps[chatId] = 'LOGIN_NAME';
@@ -445,13 +400,11 @@ bot.on('message', async (msg) => {
   if (step === 'LOGIN_NAME') {
     const accKey = text.trim().toLowerCase();
     const foundKey = Object.keys(userDataStore).find(k => k === accKey || k === text.trim());
-
     if (!foundKey) {
-      let sent = await bot.sendMessage(chatId, "❌ <b>Bunday Ism-Familiya bilan akkaunt topilmadi.</b>\n\nQaytadan kiriting yoki <b>❌ Bekor qilish</b> tugmasini bosing:", { parse_mode: 'HTML', ...cancelKeyboard });
+      let sent = await bot.sendMessage(chatId, "❌ <b>Bunday Ism-Familiya bilan akkaunt topilmadi.</b>\n\nQaytadan kiriting:", { parse_mode: 'HTML', ...cancelKeyboard });
       saveTempMsg(chatId, sent.message_id);
       return;
     }
-
     tempRegData[chatId] = { loginKey: foundKey };
     userSteps[chatId] = 'LOGIN_PASS';
     let sent = await bot.sendMessage(chatId, "🔑 <b>Parolingizni kiriting:</b>", { parse_mode: 'HTML', ...cancelKeyboard });
@@ -462,14 +415,11 @@ bot.on('message', async (msg) => {
   if (step === 'LOGIN_PASS') {
     const accKey = tempRegData[chatId]?.loginKey;
     const userAcc = userDataStore[accKey];
-
     if (!userAcc || userAcc.password !== text) {
       let sent = await bot.sendMessage(chatId, "❌ <b>Noto'g'ri parol!</b> Qaytadan kiriting:", { parse_mode: 'HTML', ...cancelKeyboard });
       saveTempMsg(chatId, sent.message_id);
       return;
     }
-
-    // ✅ Login qilganda ushbu qurilmaga (chatId) biriktirib qo'yildi
     userAcc.chatId = chatId;
     saveUsersData();
 
@@ -477,15 +427,14 @@ bot.on('message', async (msg) => {
     delete userSteps[chatId];
     delete tempRegData[chatId];
 
-    await bot.sendMessage(chatId, `✅ <b>Akkauntga muvaffaqiyatli kirdingiz!</b>\n👤 Rolingiz: <b>${userAcc.role || "O'quvchi"}</b>`, { parse_mode: 'HTML' });
-
+    await bot.sendMessage(chatId, `✅ <b>Akkauntga muvaffaqiyatli kirdingiz!</b>`, { parse_mode: 'HTML' });
     const isSubbed = await checkSub(chatId);
     if (!isSubbed) return sendSubMessage(chatId);
 
     return bot.sendMessage(chatId, `🌟 <b>Xush kelibsiz, ${escapeHTML(userAcc.fullName)}!</b>\n\nKerakli bo'limni tanlang:`, mainKeyboard(chatId));
   }
 
-  // ✅ Agar bazada bo'lmasa, majburan ro'yxatdan o'tishni so'raydi
+  // TEKSHIRUV: Bazada yo'q bo'lsa
   if (!savedUser) {
     return bot.sendMessage(chatId, "⚠️ <b>Botdan foydalanish uchun avval ro'yxatdan o'ting!</b>", { parse_mode: 'HTML', ...authStartKeyboard });
   }
@@ -493,12 +442,33 @@ bot.on('message', async (msg) => {
   const isSubbed = await checkSub(chatId);
   if (!isSubbed) return sendSubMessage(chatId);
 
+  // ASOSIY MENYU BUYRUQLARI
   if (text === '📚 Barcha Kurslar') {
     await clearTempMessages(chatId);
     if (courses.length === 0) return bot.sendMessage(chatId, "Hozircha kurslar yo'q.", mainKeyboard(chatId));
-
     let inlineButtons = courses.map(c => [{ text: `🎓 ${c.title} (${c.price})`, callback_data: `course_${c.id}` }]);
     return bot.sendMessage(chatId, "👇 <b>Mavjud kurslar:</b>", { parse_mode: 'HTML', reply_markup: { inline_keyboard: inlineButtons } });
+  }
+
+  if (text === '🔍 Kurs Qidirish') {
+    await clearTempMessages(chatId);
+    userSteps[chatId] = 'SEARCH_COURSE';
+    let sent = await bot.sendMessage(chatId, "🔍 <b>Qidirilayotgan kurs nomini yoki kalit so'zni yozing:</b>", { parse_mode: 'HTML', ...cancelKeyboard });
+    saveTempMsg(chatId, sent.message_id);
+    return;
+  }
+
+  if (step === 'SEARCH_COURSE') {
+    await clearTempMessages(chatId);
+    delete userSteps[chatId];
+    const query = text.toLowerCase().trim();
+    const found = courses.filter(c => c.title.toLowerCase().includes(query) || c.description.toLowerCase().includes(query));
+
+    if (found.length === 0) {
+      return bot.sendMessage(chatId, `❌ <b>"${escapeHTML(text)}"</b> bo'yicha hech qanday kurs topilmadi.`, { parse_mode: 'HTML', ...mainKeyboard(chatId) });
+    }
+    let inlineButtons = found.map(c => [{ text: `🎓 ${c.title} (${c.price})`, callback_data: `course_${c.id}` }]);
+    return bot.sendMessage(chatId, `🔍 <b>Topilgan kurslar (${found.length} ta):</b>`, { parse_mode: 'HTML', reply_markup: { inline_keyboard: inlineButtons } });
   }
 
   if (text === '👨‍🏫 Ustozlarimiz') {
@@ -513,7 +483,7 @@ bot.on('message', async (msg) => {
     return bot.sendMessage(chatId, `📞 <b>Bog'lanish:</b>\n📱 Tel: +998 (90) 621-44-55\n📍 Guruh: ${REQUIRED_CHANNEL}`, { parse_mode: 'HTML', ...mainKeyboard(chatId) });
   }
 
-  // ADMIN PANELI
+  // --- ADMIN PANELI FUNKSIYALARI ---
   if (isAdmin(chatId)) {
     if (text === '⚙️ Admin Panel' || text === '◀️ Admin Panel') {
       await clearTempMessages(chatId);
@@ -525,15 +495,10 @@ bot.on('message', async (msg) => {
       await clearTempMessages(chatId);
       const allUsers = Object.values(userDataStore);
       const now = Date.now();
-      const fifteenMinMs = 15 * 60 * 1000;
-
-      const recent15 = allUsers.filter(u => u.registeredAt && (now - u.registeredAt <= fifteenMinMs));
-
+      const recent15 = allUsers.filter(u => u.registeredAt && (now - u.registeredAt <= 15 * 60 * 1000));
       let msgText = `👥 <b>RO'YXATDAN O'TGANLAR BO'LIMI</b>\n\n` +
                     `📊 Jami foydalanuvchilar: <b>${allUsers.length} ta</b>\n` +
-                    `⏱ Oxirgi 15 minutda qo'shilganlar: <b>${recent15.length} ta</b>\n\n` +
-                    `Quyidagi tugmalardan birini tanlang:`;
-
+                    `⏱ Oxirgi 15 minutda qo'shilganlar: <b>${recent15.length} ta</b>`;
       return bot.sendMessage(chatId, msgText, { parse_mode: 'HTML', ...adminUsersMenuKeyboard });
     }
 
@@ -541,29 +506,19 @@ bot.on('message', async (msg) => {
       await clearTempMessages(chatId);
       const allUsers = Object.values(userDataStore);
       if (allUsers.length === 0) return bot.sendMessage(chatId, "Hozircha ro'yxatdan o'tganlar yo'q.", adminUsersMenuKeyboard);
-
       let msgText = `📋 <b>RO'YXATDAN O'TGAN FOYDALANUVCHILAR:</b>\n\n`;
-      const now = Date.now();
-      const fifteenMinMs = 15 * 60 * 1000;
-
       allUsers.forEach((u, idx) => {
-        const isNew = u.registeredAt && (now - u.registeredAt <= fifteenMinMs);
-        msgText += `${idx + 1}. <b>${escapeHTML(u.fullName)}</b> (${u.role || "O'quvchi"}) ${isNew ? '🆕 [Yangi - 15 daqiqa ichida]' : ''}\n` +
+        msgText += `${idx + 1}. <b>${escapeHTML(u.fullName)}</b> (${u.role || "O'quvchi"})\n` +
                    `📱 Tel: <code>${u.phone || 'Yo\'q'}</code>\n` +
                    `🎯 Soha: ${u.subject || 'Tanlanmagan'}\n\n`;
       });
-
       return bot.sendMessage(chatId, msgText, { parse_mode: 'HTML', ...adminUsersMenuKeyboard });
     }
 
     if (text === '🔍 Foydalanuvchi Qidirish') {
       await clearTempMessages(chatId);
       userSteps[chatId] = 'SEARCH_USER';
-      let sent = await bot.sendMessage(
-        chatId, 
-        "🔍 <b>Foydalanuvchini qidirish:</b>\n\nQidirilayotgan foydalanuvchining <b>Ismi</b>, <b>Telefon raqami</b> yoki <b>Sohasini</b> yozing:", 
-        { parse_mode: 'HTML', ...cancelKeyboard }
-      );
+      let sent = await bot.sendMessage(chatId, "🔍 <b>Foydalanuvchi Ismi, Telefon raqami yoki Sohasini kiriting:</b>", { parse_mode: 'HTML', ...cancelKeyboard });
       saveTempMsg(chatId, sent.message_id);
       return;
     }
@@ -571,39 +526,161 @@ bot.on('message', async (msg) => {
     if (step === 'SEARCH_USER') {
       await clearTempMessages(chatId);
       delete userSteps[chatId];
-
       const query = text.trim().toLowerCase();
       const allUsers = Object.values(userDataStore);
-
-      const filteredUsers = allUsers.filter(u => {
-        const nameMatch = u.fullName && u.fullName.toLowerCase().includes(query);
-        const phoneMatch = u.phone && u.phone.toLowerCase().includes(query);
-        const subjectMatch = u.subject && u.subject.toLowerCase().includes(query);
-        return nameMatch || phoneMatch || subjectMatch;
+      const filtered = allUsers.filter(u => (u.fullName && u.fullName.toLowerCase().includes(query)) || (u.phone && u.phone.includes(query)) || (u.subject && u.subject.toLowerCase().includes(query)));
+      if (filtered.length === 0) return bot.sendMessage(chatId, "Hech kim topilmadi.", adminUsersMenuKeyboard);
+      let resText = `🔍 <b>Topilgan foydalanuvchilar (${filtered.length} ta):</b>\n\n`;
+      filtered.forEach((u, i) => {
+        resText += `${i + 1}. <b>${escapeHTML(u.fullName)}</b>\n📱 Tel: ${u.phone || 'Yo\'q'}\n🎯 Soha: ${u.subject || 'Tanlanmagan'}\n\n`;
       });
+      return bot.sendMessage(chatId, resText, { parse_mode: 'HTML', ...adminUsersMenuKeyboard });
+    }
 
-      if (filteredUsers.length === 0) {
-        return bot.sendMessage(
-          chatId, 
-          `❌ <b>"${escapeHTML(text)}"</b> bo'yicha hech qanday foydalanuvchi topilmadi.`, 
-          { parse_mode: 'HTML', ...adminUsersMenuKeyboard }
-        );
+    // ➕ YANGI KURS QO'SHISH
+    if (text === '➕ Yangi Kurs Qo\'shish') {
+      await clearTempMessages(chatId);
+      userSteps[chatId] = 'ADD_COURSE_TITLE';
+      tempCourseData[chatId] = {};
+      let sent = await bot.sendMessage(chatId, "📝 <b>Yangi kurs nomini kiriting:</b>", { parse_mode: 'HTML', ...cancelKeyboard });
+      saveTempMsg(chatId, sent.message_id);
+      return;
+    }
+
+    if (step === 'ADD_COURSE_TITLE') {
+      tempCourseData[chatId].title = text.trim();
+      userSteps[chatId] = 'ADD_COURSE_TEACHER';
+      let sent = await bot.sendMessage(chatId, "👨‍🏫 <b>Ustoz ism-sharifini kiriting:</b>", { parse_mode: 'HTML', ...cancelKeyboard });
+      saveTempMsg(chatId, sent.message_id);
+      return;
+    }
+
+    if (step === 'ADD_COURSE_TEACHER') {
+      tempCourseData[chatId].teacher = text.trim();
+      userSteps[chatId] = 'ADD_COURSE_DESC';
+      let sent = await bot.sendMessage(chatId, "📄 <b>Kurs haqida qisqacha ma'lumot (tavsif) yozing:</b>", { parse_mode: 'HTML', ...cancelKeyboard });
+      saveTempMsg(chatId, sent.message_id);
+      return;
+    }
+
+    if (step === 'ADD_COURSE_DESC') {
+      tempCourseData[chatId].description = text.trim();
+      userSteps[chatId] = 'ADD_COURSE_PRICE';
+      let sent = await bot.sendMessage(chatId, "💰 <b>Kurs narxini kiriting (Masalan: 300,000 so'm):</b>", { parse_mode: 'HTML', ...cancelKeyboard });
+      saveTempMsg(chatId, sent.message_id);
+      return;
+    }
+
+    if (step === 'ADD_COURSE_PRICE') {
+      tempCourseData[chatId].price = text.trim();
+      const newId = courses.length > 0 ? Math.max(...courses.map(c => c.id)) + 1 : 1;
+      const newCourse = {
+        id: newId,
+        title: tempCourseData[chatId].title,
+        teacher: tempCourseData[chatId].teacher,
+        description: tempCourseData[chatId].description,
+        price: tempCourseData[chatId].price,
+        videos: []
+      };
+      courses.push(newCourse);
+      saveCoursesData();
+
+      await clearTempMessages(chatId);
+      delete userSteps[chatId];
+      delete tempCourseData[chatId];
+      return bot.sendMessage(chatId, `✅ <b>"${newCourse.title}" kursi muvaffaqiyatli qo'shildi!</b>`, { parse_mode: 'HTML', ...adminKeyboard });
+    }
+
+    // 📹 DARS / VIDEO QO'SHISH
+    if (text === '📹 Dars/Video Qo\'shish') {
+      await clearTempMessages(chatId);
+      if (courses.length === 0) return bot.sendMessage(chatId, "Video qo'shish uchun avval kurs yarating!", adminKeyboard);
+      let inlineButtons = courses.map(c => [{ text: c.title, callback_data: `add_vid_course_${c.id}` }]);
+      return bot.sendMessage(chatId, "📹 <b>Qaysi kursga video qo'shmoqchisiz? Tanlang:</b>", { parse_mode: 'HTML', reply_markup: { inline_keyboard: inlineButtons } });
+    }
+
+    if (step === 'ADD_VIDEO_TITLE') {
+      tempCourseData[chatId].videoTitle = text.trim();
+      userSteps[chatId] = 'ADD_VIDEO_FILE';
+      let sent = await bot.sendMessage(chatId, "🎥 <b>Dars videoni (veb-fayl yoki video xabar sifatini) yuboring:</b>", { parse_mode: 'HTML', ...cancelKeyboard });
+      saveTempMsg(chatId, sent.message_id);
+      return;
+    }
+
+    if (step === 'ADD_VIDEO_FILE') {
+      const fileId = msg.video ? msg.video.file_id : (msg.document ? msg.document.file_id : null);
+      if (!fileId) {
+        let sent = await bot.sendMessage(chatId, "⚠️ Iltimos, video fayl yuboring!", cancelKeyboard);
+        saveTempMsg(chatId, sent.message_id);
+        return;
       }
+      const courseId = tempCourseData[chatId].courseId;
+      const course = courses.find(c => c.id === courseId);
+      if (course) {
+        course.videos.push({
+          id: course.videos.length + 1,
+          title: tempCourseData[chatId].videoTitle,
+          fileId: fileId
+        });
+        saveCoursesData();
+        await clearTempMessages(chatId);
+        delete userSteps[chatId];
+        delete tempCourseData[chatId];
+        return bot.sendMessage(chatId, `✅ <b>Dars videosi muvaffaqiyatli qo'shildi!</b>`, { parse_mode: 'HTML', ...adminKeyboard });
+      }
+    }
 
-      let resultText = `🔍 <b>QIDIRUV NATIJALARI (${filteredUsers.length} ta):</b>\n\n`;
-      filteredUsers.forEach((u, idx) => {
-        resultText += `${idx + 1}. <b>${escapeHTML(u.fullName)}</b> (${u.role || "O'quvchi"})\n` +
-                      `🎂 Yoshi: ${u.age || 'Kiritilmagan'}\n` +
-                      `👫 Jinsi: ${u.gender || 'Kiritilmagan'}\n` +
-                      `📱 Tel: <code>${u.phone || 'Yo\'q'}</code>\n` +
-                      `🎯 Soha: ${u.subject || 'Tanlanmagan'}\n\n`;
-      });
+    // 🗑 KURSNI O'CHIRISH
+    if (text === '🗑 Kursni O\'chirish') {
+      await clearTempMessages(chatId);
+      if (courses.length === 0) return bot.sendMessage(chatId, "O'chirish uchun kurslar mavjud emas.", adminKeyboard);
+      let inlineButtons = courses.map(c => [{ text: `🗑 ${c.title}`, callback_data: `delete_course_${c.id}` }]);
+      return bot.sendMessage(chatId, "🗑 <b>O'chirmoqchi bo'lgan kursingizni tanlang:</b>", { parse_mode: 'HTML', reply_markup: { inline_keyboard: inlineButtons } });
+    }
 
-      return bot.sendMessage(chatId, resultText, { parse_mode: 'HTML', ...adminUsersMenuKeyboard });
+    // 📢 E'LON YUBORISH
+    if (text === '📢 E\'lon Yuborish') {
+      await clearTempMessages(chatId);
+      userSteps[chatId] = 'BROADCAST_MSG';
+      let sent = await bot.sendMessage(chatId, "📢 <b>Barcha foydalanuvchilarga yuboriladigan e'lon matnini kiriting:</b>", { parse_mode: 'HTML', ...cancelKeyboard });
+      saveTempMsg(chatId, sent.message_id);
+      return;
+    }
+
+    if (step === 'BROADCAST_MSG') {
+      await clearTempMessages(chatId);
+      delete userSteps[chatId];
+      const allUsers = Object.values(userDataStore);
+      let count = 0;
+      for (let u of allUsers) {
+        if (u.chatId) {
+          try {
+            await bot.sendMessage(u.chatId, `📢 <b>E'lon:</b>\n\n${text}`, { parse_mode: 'HTML' });
+            count++;
+          } catch(e) {}
+        }
+      }
+      return bot.sendMessage(chatId, `✅ E'lon <b>${count} ta</b> foydalanuvchiga muvaffaqiyatli yuborildi!`, { parse_mode: 'HTML', ...adminKeyboard });
+    }
+
+    // 📊 STATISTIKA
+    if (text === '📊 Statistika') {
+      await clearTempMessages(chatId);
+      const userCount = Object.keys(userDataStore).length;
+      const courseCount = courses.length;
+      let totalVids = 0;
+      courses.forEach(c => totalVids += (c.videos ? c.videos.length : 0));
+
+      let statText = `📊 <b>BOT STATISTIKASI:</b>\n\n` +
+                     `👥 Foydalanuvchilar: <b>${userCount} ta</b>\n` +
+                     `📚 Kurslar: <b>${courseCount} ta</b>\n` +
+                     `📹 Jami dars videolari: <b>${totalVids} ta</b>`;
+      return bot.sendMessage(chatId, statText, { parse_mode: 'HTML', ...adminKeyboard });
     }
   }
 });
 
+// CALLBACK QUERY HANDLER (INLINE TUGMALAR)
 bot.on('callback_query', async (query) => {
   const chatId = query.message.chat.id;
   const data = query.data;
@@ -625,12 +702,10 @@ bot.on('callback_query', async (query) => {
     if (tempRegData[chatId]) {
       tempRegData[chatId].gender = gender;
       userSteps[chatId] = 'REG_PHONE';
-
       try { await bot.deleteMessage(chatId, query.message.message_id); } catch (e) {}
-
       let sent = await bot.sendMessage(
         chatId,
-        "📱 <b>Telefon raqamingizni yuboring:</b>\n\n<i>Pastdagi \"📱 Telefon raqamimni yuborish\" tugmasini bosing:</i>",
+        "📱 <b>Telefon raqamingizni yuboring:</b>",
         { parse_mode: 'HTML', ...phoneShareKeyboard }
       );
       saveTempMsg(chatId, sent.message_id);
@@ -640,14 +715,12 @@ bot.on('callback_query', async (query) => {
   if (data.startsWith('select_subject_')) {
     const subIndex = parseInt(data.split('_')[2]);
     const selectedSubject = SUBJECTS[subIndex];
-
     const userAcc = getUserByChatId(chatId);
 
     if (userAcc) {
       userAcc.subject = selectedSubject;
       saveUsersData();
     }
-
     try { await bot.deleteMessage(chatId, query.message.message_id); } catch (e) {}
 
     const welcomeText = 
@@ -656,13 +729,62 @@ bot.on('callback_query', async (query) => {
       `🎯 Tanlangan sohangiz: <b>${selectedSubject}</b>`;
 
     await bot.sendMessage(chatId, welcomeText, { parse_mode: 'HTML' });
-
     delete tempRegData[chatId];
-
-    const isSubbed = await checkSub(chatId);
-    if (!isSubbed) return sendSubMessage(chatId);
-
     return bot.sendMessage(chatId, "👇 Kerakli bo'limni tanlang:", mainKeyboard(chatId));
+  }
+
+  // KURS HAQIDA MA'LUMOT VA VIDRO LISITINI KO'RISH
+  if (data.startsWith('course_')) {
+    const courseId = parseInt(data.split('_')[1]);
+    const course = courses.find(c => c.id === courseId);
+    if (!course) return;
+
+    let text = `🎓 <b>${escapeHTML(course.title)}</b>\n\n` +
+               `👨‍🏫 Ustoz: <b>${escapeHTML(course.teacher)}</b>\n` +
+               `💰 Narxi: <b>${escapeHTML(course.price)}</b>\n\n` +
+               `📄 <i>${escapeHTML(course.description)}</i>\n\n` +
+               `📹 <b>Darslar soni:</b> ${course.videos ? course.videos.length : 0} ta`;
+
+    let inlineButtons = [];
+    if (course.videos && course.videos.length > 0) {
+      course.videos.forEach(v => {
+        inlineButtons.push([{ text: `▶️ ${v.title}`, callback_data: `watch_vid_${course.id}_${v.id}` }]);
+      });
+    }
+
+    return bot.sendMessage(chatId, text, { parse_mode: 'HTML', reply_markup: { inline_keyboard: inlineButtons } });
+  }
+
+  // VIDEONI KO'RISH
+  if (data.startsWith('watch_vid_')) {
+    const parts = data.split('_');
+    const courseId = parseInt(parts[2]);
+    const vidId = parseInt(parts[3]);
+    const course = courses.find(c => c.id === courseId);
+    const video = course ? course.videos.find(v => v.id === vidId) : null;
+
+    if (video) {
+      return bot.sendVideo(chatId, video.fileId, { caption: `🎥 <b>${escapeHTML(video.title)}</b>`, parse_mode: 'HTML' });
+    }
+  }
+
+  // ADMIN: VIDEO QO'SHISH UCHUN KURS TANLASH
+  if (data.startsWith('add_vid_course_')) {
+    const courseId = parseInt(data.split('_')[3]);
+    tempCourseData[chatId] = { courseId: courseId };
+    userSteps[chatId] = 'ADD_VIDEO_TITLE';
+    try { await bot.deleteMessage(chatId, query.message.message_id); } catch(e) {}
+    let sent = await bot.sendMessage(chatId, "📹 <b>Dars/Video nomini kiriting:</b>", { parse_mode: 'HTML', ...cancelKeyboard });
+    saveTempMsg(chatId, sent.message_id);
+  }
+
+  // ADMIN: KURSNI O'CHIRISH
+  if (data.startsWith('delete_course_')) {
+    const courseId = parseInt(data.split('_')[2]);
+    courses = courses.filter(c => c.id !== courseId);
+    saveCoursesData();
+    try { await bot.deleteMessage(chatId, query.message.message_id); } catch(e) {}
+    return bot.sendMessage(chatId, "✅ <b>Kurs muvaffaqiyatli o'chirib tashlandi!</b>", { parse_mode: 'HTML', ...adminKeyboard });
   }
 });
 
