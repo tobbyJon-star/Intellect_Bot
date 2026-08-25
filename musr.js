@@ -28,7 +28,7 @@ app.listen(PORT, () => {
 const TOKEN = process.env.BOT_TOKEN || "8753920376:AAGUONfs4dmXPy-EjsaTYtZ8ZLgaBPkDiJc"; 
 const ADMIN_IDS = [8299255756, 5631424867];
 const REQUIRED_CHANNEL = "@intelekt_oquv_markazi";
-const COURSES_PER_PAGE = 5; // Har bir sahifadagi kurslar soni
+const COURSES_PER_PAGE = 5;
 
 function isAdmin(chatId) {
   return ADMIN_IDS.includes(Number(chatId));
@@ -230,10 +230,11 @@ async function checkSub(chatId) {
   }
 }
 
-async function sendSubMessage(chatId) {
+async function sendSubMessage(chatId, extraText = "") {
+  const textMsg = `${extraText}📢 <b>Botdan to'liq foydalanish uchun rasmiy kanalimizga a'zo bo'ling:</b>\n\n${REQUIRED_CHANNEL}`;
   return bot.sendMessage(
     chatId,
-    `📢 <b>Botdan foydalanish uchun rasmiy kanalimizga a'zo bo'ling:</b>\n\n${REQUIRED_CHANNEL}`,
+    textMsg,
     {
       parse_mode: 'HTML',
       reply_markup: {
@@ -268,7 +269,6 @@ async function sendSubjectSelection(chatId) {
   });
 }
 
-// KURSLARNI SAHIFALAB CHIQARISH FUNKSIYASI (PAGINATION)
 function getCoursesPageInlineKeyboard(page = 1) {
   const totalCourses = courses.length;
   const totalPages = Math.ceil(totalCourses / COURSES_PER_PAGE) || 1;
@@ -303,7 +303,6 @@ bot.on('message', async (msg) => {
 
   const savedUser = getUserByChatId(chatId);
 
-  // /leave BUYRUG'I - AKKAUNTDAN CHIQISH
   if (text === '/leave') {
     await clearTempMessages(chatId);
     delete userSteps[chatId];
@@ -323,7 +322,6 @@ bot.on('message', async (msg) => {
     );
   }
 
-  // FOYDALANUVCHI MENYUSIGA O'TISH
   if (text === '🏠 Foydalanuvchi Menyu' || text === '◀️ Bosh Menyu') {
     await clearTempMessages(chatId);
     delete userSteps[chatId];
@@ -345,7 +343,6 @@ bot.on('message', async (msg) => {
     );
   }
 
-  // START VA BEKOR QILISH
   if (text === '❌ Bekor qilish' || text === '/start') {
     await clearTempMessages(chatId);
     delete userSteps[chatId];
@@ -385,7 +382,6 @@ bot.on('message', async (msg) => {
     saveTempMsg(chatId, msgId);
   }
 
-  // RO'YXATDAN O'TISH
   if (text === '📝 Ro\'yxatdan o\'tish') {
     await clearTempMessages(chatId);
     userSteps[chatId] = 'REG_ROLE';
@@ -467,7 +463,6 @@ bot.on('message', async (msg) => {
     return sendSubjectSelection(chatId);
   }
 
-  // LOGIN
   if (text === '🔑 Akkauntga kirish (Login)') {
     await clearTempMessages(chatId);
     userSteps[chatId] = 'LOGIN_NAME';
@@ -520,7 +515,6 @@ bot.on('message', async (msg) => {
   const isSubbed = await checkSub(chatId);
   if (!isSubbed) return sendSubMessage(chatId);
 
-  // ASOSIY MENYU - BARCHA KURSLAR (SAHIFALANIB CHIQADI)
   if (text === '📚 Barcha Kurslar') {
     await clearTempMessages(chatId);
     if (courses.length === 0) return bot.sendMessage(chatId, "Hozircha kurslar yo'q.", mainKeyboard(chatId));
@@ -868,9 +862,10 @@ bot.on('callback_query', async (query) => {
     const isSubbed = await checkSub(chatId);
     if (isSubbed) {
       try { await bot.deleteMessage(chatId, query.message.message_id); } catch(e) {}
-      bot.sendMessage(chatId, "✅ Rahmat! Kanalimizga a'zo bo'ldingiz.", mainKeyboard(chatId));
+      await bot.sendMessage(chatId, "✅ Rahmat! Kanalimizga muvaffaqiyatli a'zo bo'ldingiz.");
+      return bot.sendMessage(chatId, "👇 Kerakli bo'limni tanlang:", mainKeyboard(chatId));
     } else {
-      bot.answerCallbackQuery(query.id, { text: "❌ Siz hali kanalga a'zo bo'lmadingiz!", show_alert: true });
+      return bot.answerCallbackQuery(query.id, { text: "❌ Siz hali kanalga a'zo bo'lmadingiz!", show_alert: true });
     }
   }
 
@@ -889,7 +884,7 @@ bot.on('callback_query', async (query) => {
     }
   }
 
-  // SOHA TANLANGANDAN SO'NG DARHOL MAJBURIY OBUNA TEKSHIRILADI
+  // SOHA TANLANGANDAN SO'NG O'TISH
   if (data.startsWith('select_subject_')) {
     const subIndex = parseInt(data.split('_')[2]);
     const selectedSubject = SUBJECTS[subIndex];
@@ -901,24 +896,22 @@ bot.on('callback_query', async (query) => {
     }
     try { await bot.deleteMessage(chatId, query.message.message_id); } catch (e) {}
 
-    const welcomeText = 
+    const welcomeHeader = 
       `🌟 Xush kelibsiz, ${escapeHTML(userAcc ? userAcc.fullName : '')}!\n\n` +
       `Bizning <b>"Intellekt"</b> ta'lim oilamizga xush kelibsiz! 🚀\n\n` +
-      `🎯 Tanlangan sohangiz: <b>${selectedSubject}</b>`;
+      `🎯 Tanlangan sohangiz: <b>${selectedSubject}</b>\n\n`;
 
-    await bot.sendMessage(chatId, welcomeText, { parse_mode: 'HTML' });
     delete tempRegData[chatId];
 
-    // Obunani tekshiramiz
+    // Obuna bo'lmagan bo'lsa, xabarga inline-kanal tugmalarini ulaydi
     const isSubbed = await checkSub(chatId);
     if (!isSubbed) {
-      return sendSubMessage(chatId);
+      return sendSubMessage(chatId, welcomeHeader);
     }
 
-    return bot.sendMessage(chatId, "👇 Kerakli bo'limni tanlang:", mainKeyboard(chatId));
+    return bot.sendMessage(chatId, `${welcomeHeader}👇 Kerakli bo'limni tanlang:`, { parse_mode: 'HTML', ...mainKeyboard(chatId) });
   }
 
-  // KURSLAR SAHIFALARINI VAROQLASH
   if (data.startsWith('courses_page_')) {
     const page = parseInt(data.split('_')[2]);
     try {
@@ -931,7 +924,7 @@ bot.on('callback_query', async (query) => {
   }
 
   if (data === 'ignore_page_click') {
-    return; // Sahifa raqami bosilganda hech narsa qilmaydi
+    return;
   }
 
   if (data.startsWith('send_msg_user_')) {
