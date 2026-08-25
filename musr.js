@@ -28,6 +28,7 @@ app.listen(PORT, () => {
 const TOKEN = process.env.BOT_TOKEN || "8753920376:AAGUONfs4dmXPy-EjsaTYtZ8ZLgaBPkDiJc"; 
 const ADMIN_IDS = [8299255756, 5631424867];
 const REQUIRED_CHANNEL = "@intelekt_oquv_markazi";
+const COURSES_PER_PAGE = 5; // Har bir sahifadagi kurslar soni
 
 function isAdmin(chatId) {
   return ADMIN_IDS.includes(Number(chatId));
@@ -232,12 +233,12 @@ async function checkSub(chatId) {
 async function sendSubMessage(chatId) {
   return bot.sendMessage(
     chatId,
-    `📢 <b>Botdan foydalanish uchun rasmiy guruhimizga a'zo bo'ling:</b>\n\n${REQUIRED_CHANNEL}`,
+    `📢 <b>Botdan foydalanish uchun rasmiy kanalimizga a'zo bo'ling:</b>\n\n${REQUIRED_CHANNEL}`,
     {
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
-          [{ text: "📢 Guruhga o'tish", url: `https://t.me/${REQUIRED_CHANNEL.replace('@', '')}` }],
+          [{ text: "📢 Kanalga o'tish", url: `https://t.me/${REQUIRED_CHANNEL.replace('@', '')}` }],
           [{ text: "✅ A'zolikni tekshirish", callback_data: "check_subscription" }]
         ]
       }
@@ -267,6 +268,33 @@ async function sendSubjectSelection(chatId) {
   });
 }
 
+// KURSLARNI SAHIFALAB CHIQARISH FUNKSIYASI (PAGINATION)
+function getCoursesPageInlineKeyboard(page = 1) {
+  const totalCourses = courses.length;
+  const totalPages = Math.ceil(totalCourses / COURSES_PER_PAGE) || 1;
+  const currentPage = Math.min(Math.max(1, page), totalPages);
+
+  const startIndex = (currentPage - 1) * COURSES_PER_PAGE;
+  const pageCourses = courses.slice(startIndex, startIndex + COURSES_PER_PAGE);
+
+  let inlineButtons = pageCourses.map(c => [{ text: `🎓 ${c.title} (${c.price})`, callback_data: `course_${c.id}` }]);
+
+  let navRow = [];
+  if (currentPage > 1) {
+    navRow.push({ text: "⬅️ Orqaga", callback_data: `courses_page_${currentPage - 1}` });
+  }
+  navRow.push({ text: `📄 ${currentPage}/${totalPages}`, callback_data: "ignore_page_click" });
+  if (currentPage < totalPages) {
+    navRow.push({ text: "Keyingi ➡️", callback_data: `courses_page_${currentPage + 1}` });
+  }
+
+  if (navRow.length > 0) {
+    inlineButtons.push(navRow);
+  }
+
+  return { inline_keyboard: inlineButtons };
+}
+
 // BOT MESSAGE HANDLER
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
@@ -274,6 +302,26 @@ bot.on('message', async (msg) => {
   const msgId = msg.message_id;
 
   const savedUser = getUserByChatId(chatId);
+
+  // /leave BUYRUG'I - AKKAUNTDAN CHIQISH
+  if (text === '/leave') {
+    await clearTempMessages(chatId);
+    delete userSteps[chatId];
+    delete tempCourseData[chatId];
+    delete tempRegData[chatId];
+    delete tempTargetUser[chatId];
+
+    if (savedUser) {
+      savedUser.chatId = null;
+      saveUsersData();
+    }
+
+    return bot.sendMessage(
+      chatId,
+      "🚪 <b>Akkauntdan muvaffaqiyatli chiqdingiz!</b>\n\nMa'lumotlaringiz xotirada saqlab qolindi. Qayta kirish uchun Login tugmasini bosing:",
+      { parse_mode: 'HTML', ...authStartKeyboard }
+    );
+  }
 
   // FOYDALANUVCHI MENYUSIGA O'TISH
   if (text === '🏠 Foydalanuvchi Menyu' || text === '◀️ Bosh Menyu') {
@@ -286,6 +334,9 @@ bot.on('message', async (msg) => {
     if (!savedUser) {
       return bot.sendMessage(chatId, "🌟 Botdan foydalanish uchun ro'yxatdan o'ting:", authStartKeyboard);
     }
+
+    const isSubbed = await checkSub(chatId);
+    if (!isSubbed) return sendSubMessage(chatId);
 
     return bot.sendMessage(
       chatId,
@@ -469,14 +520,17 @@ bot.on('message', async (msg) => {
   const isSubbed = await checkSub(chatId);
   if (!isSubbed) return sendSubMessage(chatId);
 
-  // ASOSIY MENYU
+  // ASOSIY MENYU - BARCHA KURSLAR (SAHIFALANIB CHIQADI)
   if (text === '📚 Barcha Kurslar') {
     await clearTempMessages(chatId);
     if (courses.length === 0) return bot.sendMessage(chatId, "Hozircha kurslar yo'q.", mainKeyboard(chatId));
-    let inlineButtons = courses.map(c => [{ text: `🎓 ${c.title} (${c.price})`, callback_data: `course_${c.id}` }]);
-    
+
     await bot.sendMessage(chatId, "👇 Boshqaruv menyusi faol:", mainKeyboard(chatId));
-    return bot.sendMessage(chatId, "👇 <b>Mavjud kurslar:</b>", { parse_mode: 'HTML', reply_markup: { inline_keyboard: inlineButtons } });
+    return bot.sendMessage(
+      chatId, 
+      `📚 <b>Mavjud kurslar (Jami: ${courses.length} ta):</b>`, 
+      { parse_mode: 'HTML', reply_markup: getCoursesPageInlineKeyboard(1) }
+    );
   }
 
   if (text === '🔍 Kurs Qidirish') {
@@ -510,7 +564,7 @@ bot.on('message', async (msg) => {
 
   if (text === '📞 Bog\'lanish & Manzil') {
     await clearTempMessages(chatId);
-    return bot.sendMessage(chatId, `📞 <b>Bog'lanish:</b>\n📱 Tel: +998 (90) 621-44-55\n📍 Guruh: ${REQUIRED_CHANNEL}`, { parse_mode: 'HTML', ...mainKeyboard(chatId) });
+    return bot.sendMessage(chatId, `📞 <b>Bog'lanish:</b>\n📱 Tel: +998 (90) 621-44-55\n📍 Kanal: ${REQUIRED_CHANNEL}`, { parse_mode: 'HTML', ...mainKeyboard(chatId) });
   }
 
   // ADMIN PANELI
@@ -545,10 +599,15 @@ bot.on('message', async (msg) => {
                        `📱 Tel: <code>${u.phone || 'Yo\'q'}</code>\n` +
                        `🎯 Soha: ${u.subject || 'Tanlanmagan'}`;
         
+        let userKey = u.fullName.toLowerCase();
         let inlineBtn = [];
         if (u.chatId) {
-          inlineBtn.push([{ text: "✉️ Xabar yuborish", callback_data: `send_msg_user_${u.chatId}` }]);
+          inlineBtn.push([{ text: "✉️ Xabar", callback_data: `send_msg_user_${u.chatId}` }]);
+          inlineBtn.push([{ text: "⚠️ Ogohlantirish", callback_data: `warn_user_${u.chatId}` }]);
+          inlineBtn.push([{ text: "🚫 Kick (Chiqarish)", callback_data: `kick_user_${u.chatId}` }]);
         }
+        inlineBtn.push([{ text: "🗑 Ban/O'chirish", callback_data: `ban_user_${encodeURIComponent(userKey)}` }]);
+
         await bot.sendMessage(chatId, userCard, { parse_mode: 'HTML', reply_markup: { inline_keyboard: inlineBtn } });
       }
       return;
@@ -577,16 +636,20 @@ bot.on('message', async (msg) => {
                        `📱 Tel: <code>${u.phone || 'Yo\'q'}</code>\n` +
                        `🎯 Soha: ${u.subject || 'Tanlanmagan'}`;
         
+        let userKey = u.fullName.toLowerCase();
         let inlineBtn = [];
         if (u.chatId) {
-          inlineBtn.push([{ text: "✉️ Xabar yuborish", callback_data: `send_msg_user_${u.chatId}` }]);
+          inlineBtn.push([{ text: "✉️ Xabar", callback_data: `send_msg_user_${u.chatId}` }]);
+          inlineBtn.push([{ text: "⚠️ Ogohlantirish", callback_data: `warn_user_${u.chatId}` }]);
+          inlineBtn.push([{ text: "🚫 Kick (Chiqarish)", callback_data: `kick_user_${u.chatId}` }]);
         }
+        inlineBtn.push([{ text: "🗑 Ban/O'chirish", callback_data: `ban_user_${encodeURIComponent(userKey)}` }]);
+
         await bot.sendMessage(chatId, userCard, { parse_mode: 'HTML', reply_markup: { inline_keyboard: inlineBtn } });
       }
       return;
     }
 
-    // BIRTA FOYDALANUVCHIGA XABAR YUBORISH
     if (step === 'SEND_DIRECT_MSG_USER') {
       await clearTempMessages(chatId);
       delete userSteps[chatId];
@@ -598,12 +661,27 @@ bot.on('message', async (msg) => {
           await bot.sendMessage(targetChatId, `📩 <b>Admin xabari:</b>\n\n${text}`, { parse_mode: 'HTML' });
           return bot.sendMessage(chatId, "✅ <b>Xabar foydalanuvchiga muvaffaqiyatli yetkazildi!</b>", { parse_mode: 'HTML', ...adminKeyboard });
         } catch (e) {
-          return bot.sendMessage(chatId, "❌ Xabar yuborishda xatolik yuz berdi (Foydalanuvchi botni bloklagan bo'lishi mumkin).", adminKeyboard);
+          return bot.sendMessage(chatId, "❌ Xabar yuborishda xatolik yuz berdi.", adminKeyboard);
         }
       }
     }
 
-    // ➕ YANGI KURS QO'SHISH
+    if (step === 'WARN_DIRECT_MSG_USER') {
+      await clearTempMessages(chatId);
+      delete userSteps[chatId];
+      const targetChatId = tempTargetUser[chatId];
+      delete tempTargetUser[chatId];
+
+      if (targetChatId) {
+        try {
+          await bot.sendMessage(targetChatId, `⚠️ <b>ADMINSTRATSIYA OGOHLANTIRISHI:</b>\n\n${text}\n\n<i>Iltimos, bot qoidalariga rioya qiling!</i>`, { parse_mode: 'HTML' });
+          return bot.sendMessage(chatId, "✅ <b>Ogohlantirish foydalanuvchiga yuborildi!</b>", { parse_mode: 'HTML', ...adminKeyboard });
+        } catch (e) {
+          return bot.sendMessage(chatId, "❌ Ogohlantirish yuborishda xatolik.", adminKeyboard);
+        }
+      }
+    }
+
     if (text === '➕ Yangi Kurs Qo\'shish') {
       await clearTempMessages(chatId);
       userSteps[chatId] = 'ADD_COURSE_TITLE';
@@ -662,7 +740,6 @@ bot.on('message', async (msg) => {
       return bot.sendMessage(chatId, `✅ <b>"${newCourse.title}" kursi muvaffaqiyatli qo'shildi!</b>`, { parse_mode: 'HTML', ...adminKeyboard });
     }
 
-    // ✏️ KURSNI TAHRIRLASH
     if (text === '✏️ Kursni Tahrirlash') {
       await clearTempMessages(chatId);
       if (courses.length === 0) return bot.sendMessage(chatId, "Tahrirlash uchun kurslar mavjud emas.", adminKeyboard);
@@ -685,7 +762,6 @@ bot.on('message', async (msg) => {
       }
     }
 
-    // 📹 DARS / VIDEO QO'SHISH
     if (text === '📹 Dars/Video Qo\'shish') {
       await clearTempMessages(chatId);
       if (courses.length === 0) return bot.sendMessage(chatId, "Video qo'shish uchun avval kurs yarating!", adminKeyboard);
@@ -732,7 +808,6 @@ bot.on('message', async (msg) => {
       }
     }
 
-    // 🗑 KURSNI O'CHIRISH
     if (text === '🗑 Kursni O\'chirish') {
       await clearTempMessages(chatId);
       if (courses.length === 0) return bot.sendMessage(chatId, "O'chirish uchun kurslar mavjud emas.", adminKeyboard);
@@ -742,7 +817,6 @@ bot.on('message', async (msg) => {
       return bot.sendMessage(chatId, "🗑 <b>O'chirmoqchi bo'lgan kursingizni tanlang:</b>", { parse_mode: 'HTML', reply_markup: { inline_keyboard: inlineButtons } });
     }
 
-    // 📢 E'LON YUBORISH
     if (text === '📢 E\'lon Yuborish') {
       await clearTempMessages(chatId);
       userSteps[chatId] = 'BROADCAST_MSG';
@@ -767,7 +841,6 @@ bot.on('message', async (msg) => {
       return bot.sendMessage(chatId, `✅ E'lon <b>${count} ta</b> foydalanuvchiga muvaffaqiyatli yuborildi!`, { parse_mode: 'HTML', ...adminKeyboard });
     }
 
-    // 📊 STATISTIKA
     if (text === '📊 Statistika') {
       await clearTempMessages(chatId);
       const userCount = Object.keys(userDataStore).length;
@@ -795,9 +868,9 @@ bot.on('callback_query', async (query) => {
     const isSubbed = await checkSub(chatId);
     if (isSubbed) {
       try { await bot.deleteMessage(chatId, query.message.message_id); } catch(e) {}
-      bot.sendMessage(chatId, "✅ Rahmat! Guruhga a'zo bo'ldingiz.", mainKeyboard(chatId));
+      bot.sendMessage(chatId, "✅ Rahmat! Kanalimizga a'zo bo'ldingiz.", mainKeyboard(chatId));
     } else {
-      bot.answerCallbackQuery(query.id, { text: "❌ Siz hali guruhga a'zo bo'lmadingiz!", show_alert: true });
+      bot.answerCallbackQuery(query.id, { text: "❌ Siz hali kanalga a'zo bo'lmadingiz!", show_alert: true });
     }
   }
 
@@ -816,6 +889,7 @@ bot.on('callback_query', async (query) => {
     }
   }
 
+  // SOHA TANLANGANDAN SO'NG DARHOL MAJBURIY OBUNA TEKSHIRILADI
   if (data.startsWith('select_subject_')) {
     const subIndex = parseInt(data.split('_')[2]);
     const selectedSubject = SUBJECTS[subIndex];
@@ -834,10 +908,32 @@ bot.on('callback_query', async (query) => {
 
     await bot.sendMessage(chatId, welcomeText, { parse_mode: 'HTML' });
     delete tempRegData[chatId];
+
+    // Obunani tekshiramiz
+    const isSubbed = await checkSub(chatId);
+    if (!isSubbed) {
+      return sendSubMessage(chatId);
+    }
+
     return bot.sendMessage(chatId, "👇 Kerakli bo'limni tanlang:", mainKeyboard(chatId));
   }
 
-  // TANLANGAN FOYDALANUVCHIGA XABAR YUBORISH
+  // KURSLAR SAHIFALARINI VAROQLASH
+  if (data.startsWith('courses_page_')) {
+    const page = parseInt(data.split('_')[2]);
+    try {
+      await bot.editMessageReplyMarkup(
+        getCoursesPageInlineKeyboard(page),
+        { chat_id: chatId, message_id: query.message.message_id }
+      );
+    } catch(e) {}
+    return;
+  }
+
+  if (data === 'ignore_page_click') {
+    return; // Sahifa raqami bosilganda hech narsa qilmaydi
+  }
+
   if (data.startsWith('send_msg_user_')) {
     const targetChatId = parseInt(data.split('_')[3]);
     const userAcc = getUserByChatId(targetChatId);
@@ -853,7 +949,55 @@ bot.on('callback_query', async (query) => {
     return;
   }
 
-  // KURS MA'LUMOTI
+  if (data.startsWith('warn_user_')) {
+    const targetChatId = parseInt(data.split('_')[2]);
+    const userAcc = getUserByChatId(targetChatId);
+    tempTargetUser[chatId] = targetChatId;
+    userSteps[chatId] = 'WARN_DIRECT_MSG_USER';
+
+    let sent = await bot.sendMessage(
+      chatId,
+      `⚠️ <b>${escapeHTML(userAcc ? userAcc.fullName : 'Foydalanuvchi')}</b>ga yuboriladigan ogohlantirish sababini yozing:`,
+      { parse_mode: 'HTML', ...cancelKeyboard }
+    );
+    saveTempMsg(chatId, sent.message_id);
+    return;
+  }
+
+  if (data.startsWith('kick_user_')) {
+    const targetChatId = parseInt(data.split('_')[2]);
+    const userAcc = getUserByChatId(targetChatId);
+
+    if (userAcc) {
+      userAcc.chatId = null;
+      saveUsersData();
+    }
+
+    try {
+      await bot.sendMessage(targetChatId, "🚫 <b>Siz admin tomonidan botdan vaqtincha chiqarildingiz!</b>", { parse_mode: 'HTML', ...authStartKeyboard });
+    } catch(e) {}
+
+    return bot.sendMessage(chatId, `🚫 <b>${escapeHTML(userAcc ? userAcc.fullName : 'Foydalanuvchi')} botdan vaqtincha chiqarildi (kick qilindi).</b>`, { parse_mode: 'HTML', ...adminKeyboard });
+  }
+
+  if (data.startsWith('ban_user_')) {
+    const userKey = decodeURIComponent(data.split('_')[2]);
+    const userAcc = userDataStore[userKey];
+
+    if (userAcc) {
+      if (userAcc.chatId) {
+        try {
+          await bot.sendMessage(userAcc.chatId, "🚫 <b>Sizning akkauntingiz admin tomonidan butunlay o'chirildi va taqiqlandi!</b>", authStartKeyboard);
+        } catch(e) {}
+      }
+      delete userDataStore[userKey];
+      saveUsersData();
+      return bot.sendMessage(chatId, `🗑 <b>Foydalanuvchi va uning barcha ma'lumotlari bazadan butunlay o'chirildi (Ban qilindi).</b>`, { parse_mode: 'HTML', ...adminKeyboard });
+    } else {
+      return bot.sendMessage(chatId, "❌ Foydalanuvchi topilmadi.", adminKeyboard);
+    }
+  }
+
   if (data.startsWith('course_')) {
     const courseId = parseInt(data.split('_')[1]);
     const course = courses.find(c => c.id === courseId);
@@ -875,7 +1019,6 @@ bot.on('callback_query', async (query) => {
     return bot.sendMessage(chatId, text, { parse_mode: 'HTML', reply_markup: { inline_keyboard: inlineButtons } });
   }
 
-  // VIDEO KO'RISH
   if (data.startsWith('watch_vid_')) {
     const parts = data.split('_');
     const courseId = parseInt(parts[2]);
@@ -888,7 +1031,6 @@ bot.on('callback_query', async (query) => {
     }
   }
 
-  // ADMIN: TAHRIRLASH MENYUSI
   if (data.startsWith('edit_course_')) {
     const courseId = parseInt(data.split('_')[2]);
     const course = courses.find(c => c.id === courseId);
@@ -917,7 +1059,6 @@ bot.on('callback_query', async (query) => {
     saveTempMsg(chatId, sent.message_id);
   }
 
-  // ADMIN: VIDEO QO'SHISH
   if (data.startsWith('add_vid_course_')) {
     const courseId = parseInt(data.split('_')[3]);
     tempCourseData[chatId] = { courseId: courseId };
@@ -927,7 +1068,6 @@ bot.on('callback_query', async (query) => {
     saveTempMsg(chatId, sent.message_id);
   }
 
-  // ADMIN: KURSNI O'CHIRISH
   if (data.startsWith('delete_course_')) {
     const courseId = parseInt(data.split('_')[2]);
     courses = courses.filter(c => c.id !== courseId);
