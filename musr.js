@@ -6,7 +6,6 @@ import https from 'https';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Render havolangiz (Server uxlamasligi uchun)
 const RENDER_URL = "https://intellect-bot-ikul.onrender.com";
 
 app.get('/', (req, res) => {
@@ -16,9 +15,6 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server ${PORT}-portda ishga tushdi.`);
 
-  // -------------------------------------------------------------
-  // SERVERNI UXALASHGA YO'L QO'YMAYDIGAN AVTOMATIK PING (Har 10 daqiqada)
-  // -------------------------------------------------------------
   setInterval(() => {
     if (RENDER_URL) {
       https.get(RENDER_URL, (res) => {
@@ -549,6 +545,54 @@ bot.on('message', async (msg) => {
       });
 
       return bot.sendMessage(chatId, msgText, { parse_mode: 'HTML', ...adminUsersMenuKeyboard });
+    }
+
+    // 🔍 FOYDALANUVCHI QIDIRISH (BUYRUQ)
+    if (text === '🔍 Foydalanuvchi Qidirish') {
+      await clearTempMessages(chatId);
+      userSteps[chatId] = 'SEARCH_USER';
+      let sent = await bot.sendMessage(
+        chatId, 
+        "🔍 <b>Foydalanuvchini qidirish:</b>\n\nQidirilayotgan foydalanuvchining <b>Ismi</b>, <b>Telefon raqami</b> yoki <b>Sohasini</b> yozing:", 
+        { parse_mode: 'HTML', ...cancelKeyboard }
+      );
+      saveTempMsg(chatId, sent.message_id);
+      return;
+    }
+
+    // 🔍 FOYDALANUVCHI QIDIRISH (MATN KELGANDA)
+    if (step === 'SEARCH_USER') {
+      await clearTempMessages(chatId);
+      delete userSteps[chatId];
+
+      const query = text.trim().toLowerCase();
+      const allUsers = Object.values(userDataStore);
+
+      const filteredUsers = allUsers.filter(u => {
+        const nameMatch = u.fullName && u.fullName.toLowerCase().includes(query);
+        const phoneMatch = u.phone && u.phone.toLowerCase().includes(query);
+        const subjectMatch = u.subject && u.subject.toLowerCase().includes(query);
+        return nameMatch || phoneMatch || subjectMatch;
+      });
+
+      if (filteredUsers.length === 0) {
+        return bot.sendMessage(
+          chatId, 
+          `❌ <b>"${escapeHTML(text)}"</b> bo'yicha hech qanday foydalanuvchi topilmadi.`, 
+          { parse_mode: 'HTML', ...adminUsersMenuKeyboard }
+        );
+      }
+
+      let resultText = `🔍 <b>QIDIRUV NATIJALARI (${filteredUsers.length} ta):</b>\n\n`;
+      filteredUsers.forEach((u, idx) => {
+        resultText += `${idx + 1}. <b>${escapeHTML(u.fullName)}</b> (${u.role || "O'quvchi"})\n` +
+                      `🎂 Yoshi: ${u.age || 'Kiritilmagan'}\n` +
+                      `👫 Jinsi: ${u.gender || 'Kiritilmagan'}\n` +
+                      `📱 Tel: <code>${u.phone || 'Yo\'q'}</code>\n` +
+                      `🎯 Soha: ${u.subject || 'Tanlanmagan'}\n\n`;
+      });
+
+      return bot.sendMessage(chatId, resultText, { parse_mode: 'HTML', ...adminUsersMenuKeyboard });
     }
   }
 });
