@@ -136,11 +136,16 @@ function saveUsersData() {
 
 let courses = loadCourses();
 let userDataStore = loadUsers();
-let activeSessions = {};
 let userSteps = {};
 let tempRegData = {};
 let tempCourseData = {};
 let tempMessages = {};
+
+// ✅ chatId orqali avto-login qilingan foydalanuvchini topish funksiyasi
+function getUserByChatId(chatId) {
+  const allUsers = Object.values(userDataStore);
+  return allUsers.find(u => u.chatId === chatId);
+}
 
 function validatePassword(pass) {
   if (pass.length < 8) return false;
@@ -295,6 +300,9 @@ bot.on('message', async (msg) => {
   const text = msg.text || '';
   const msgId = msg.message_id;
 
+  // Telegram ID bo'yicha bazadan foydalanuvchini tekshiramiz
+  const savedUser = getUserByChatId(chatId);
+
   if (text === '❌ Bekor qilish' || text === '/start' || text === '◀️ Bosh Menyu') {
     await clearTempMessages(chatId);
     delete userSteps[chatId];
@@ -305,11 +313,12 @@ bot.on('message', async (msg) => {
       return bot.sendMessage(
         chatId, 
         "Jarayon bekor qilindi.", 
-        activeSessions[chatId] ? (isAdmin(chatId) ? adminKeyboard : mainKeyboard(chatId)) : authStartKeyboard
+        savedUser ? (isAdmin(chatId) ? adminKeyboard : mainKeyboard(chatId)) : authStartKeyboard
       );
     }
 
-    if (!activeSessions[chatId]) {
+    // ✅ Agar foydalanuvchi bazada yo'q bo'lsa: Ro'yxatdan o'tish menyusi
+    if (!savedUser) {
       return bot.sendMessage(
         chatId,
         `🌟 <b>"Intellekt" platformasiga xush kelibsiz!</b>\n\nBotdan foydalanish uchun avval ro'yxatdan o'ting yoki login qiling:`,
@@ -317,12 +326,13 @@ bot.on('message', async (msg) => {
       );
     }
 
+    // ✅ Agar foydalanuvchi bazada bor bo'lsa: Qayta login so'ramasdan direkt kutib oladi
     const isSubbed = await checkSub(chatId);
     if (!isSubbed) return sendSubMessage(chatId);
 
     return bot.sendMessage(
       chatId,
-      `🌟 <b>Xush kelibsiz!</b>\n\nKerakli bo'limni tanlang:`,
+      `🌟 <b>Xush kelibsiz, ${escapeHTML(savedUser.fullName)}!</b>\n\nKerakli bo'limni tanlang:`,
       { parse_mode: 'HTML', ...mainKeyboard(chatId) }
     );
   }
@@ -411,14 +421,12 @@ bot.on('message', async (msg) => {
 
     const accKey = tempRegData[chatId].fullName.toLowerCase();
     tempRegData[chatId].password = text;
-    tempRegData[chatId].chatId = chatId;
+    tempRegData[chatId].chatId = chatId; // ✅ Foydalanuvchi telegram chatId'si doimiy saqlanadi
     tempRegData[chatId].registeredAt = Date.now();
     tempRegData[chatId].subject = null;
 
     userDataStore[accKey] = tempRegData[chatId];
-    saveUsersData();
-
-    activeSessions[chatId] = accKey;
+    saveUsersData(); // JSON faylga yozildi (doimiy saqlanadi)
 
     await clearTempMessages(chatId);
     delete userSteps[chatId];
@@ -461,9 +469,9 @@ bot.on('message', async (msg) => {
       return;
     }
 
+    // ✅ Login qilganda ushbu qurilmaga (chatId) biriktirib qo'yildi
     userAcc.chatId = chatId;
     saveUsersData();
-    activeSessions[chatId] = accKey;
 
     await clearTempMessages(chatId);
     delete userSteps[chatId];
@@ -474,10 +482,11 @@ bot.on('message', async (msg) => {
     const isSubbed = await checkSub(chatId);
     if (!isSubbed) return sendSubMessage(chatId);
 
-    return bot.sendMessage(chatId, "🌟 <b>Xush kelibsiz!</b> Kerakli bo'limni tanlang:", mainKeyboard(chatId));
+    return bot.sendMessage(chatId, `🌟 <b>Xush kelibsiz, ${escapeHTML(userAcc.fullName)}!</b>\n\nKerakli bo'limni tanlang:`, mainKeyboard(chatId));
   }
 
-  if (!activeSessions[chatId]) {
+  // ✅ Agar bazada bo'lmasa, majburan ro'yxatdan o'tishni so'raydi
+  if (!savedUser) {
     return bot.sendMessage(chatId, "⚠️ <b>Botdan foydalanish uchun avval ro'yxatdan o'ting!</b>", { parse_mode: 'HTML', ...authStartKeyboard });
   }
 
@@ -547,7 +556,6 @@ bot.on('message', async (msg) => {
       return bot.sendMessage(chatId, msgText, { parse_mode: 'HTML', ...adminUsersMenuKeyboard });
     }
 
-    // 🔍 FOYDALANUVCHI QIDIRISH (BUYRUQ)
     if (text === '🔍 Foydalanuvchi Qidirish') {
       await clearTempMessages(chatId);
       userSteps[chatId] = 'SEARCH_USER';
@@ -560,7 +568,6 @@ bot.on('message', async (msg) => {
       return;
     }
 
-    // 🔍 FOYDALANUVCHI QIDIRISH (MATN KELGANDA)
     if (step === 'SEARCH_USER') {
       await clearTempMessages(chatId);
       delete userSteps[chatId];
@@ -634,12 +641,10 @@ bot.on('callback_query', async (query) => {
     const subIndex = parseInt(data.split('_')[2]);
     const selectedSubject = SUBJECTS[subIndex];
 
-    const accKey = activeSessions[chatId];
-    let userAcc = null;
+    const userAcc = getUserByChatId(chatId);
 
-    if (accKey && userDataStore[accKey]) {
-      userDataStore[accKey].subject = selectedSubject;
-      userAcc = userDataStore[accKey];
+    if (userAcc) {
+      userAcc.subject = selectedSubject;
       saveUsersData();
     }
 
