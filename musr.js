@@ -303,6 +303,13 @@ bot.on('message', async (msg) => {
 
   const savedUser = getUserByChatId(chatId);
 
+  // KICK MUDDATINI TEKSHIRISH (2 kunlik ban)
+  const allUsersCheck = Object.values(userDataStore);
+  const foundByChat = allUsersCheck.find(u => u.chatId === chatId);
+  if (foundByChat && foundByChat.kickUntil && Date.now() < foundByChat.kickUntil) {
+    return bot.sendMessage(chatId, "⚠️ Biz sizni taniymiz, sz berilgan muddat tugasa keyin kira olasz.", authStartKeyboard);
+  }
+
   if (text === '/leave') {
     await clearTempMessages(chatId);
     delete userSteps[chatId];
@@ -494,6 +501,11 @@ bot.on('message', async (msg) => {
       saveTempMsg(chatId, sent.message_id);
       return;
     }
+
+    if (userAcc.kickUntil && Date.now() < userAcc.kickUntil) {
+      return bot.sendMessage(chatId, "⚠️ Biz sizni taniymiz, sz berilgan muddat tugasa keyin kira olasz.", authStartKeyboard);
+    }
+
     userAcc.chatId = chatId;
     saveUsersData();
 
@@ -959,18 +971,32 @@ bot.on('callback_query', async (query) => {
 
   if (data.startsWith('kick_user_')) {
     const targetChatId = parseInt(data.split('_')[2]);
-    const userAcc = getUserByChatId(targetChatId);
+    const allUsers = Object.values(userDataStore);
+    const userAcc = allUsers.find(u => u.chatId === targetChatId);
 
     if (userAcc) {
-      userAcc.chatId = null;
+      userAcc.kickUntil = Date.now() + (2 * 24 * 60 * 60 * 1000); // 2 kunlik vaqt
       saveUsersData();
+
+      try {
+        await bot.sendMessage(
+          targetChatId, 
+          "⚠️ <b>Siz admin tomonidan noxush tebranishni sezdik va siz endi 2 kundan keyin kirishingiz mumkin.</b>\n\n⏳ <i>Sizga chiqib ketish uchun 20 sekund vaqt berildi!</i>", 
+          { parse_mode: 'HTML' }
+        );
+      } catch(e) {}
+
+      // 20 sekunddan keyin botdan chopish
+      setTimeout(async () => {
+        try {
+          userAcc.chatId = null;
+          saveUsersData();
+          await bot.sendMessage(targetChatId, "🚪 Vaqt tugadi. Siz botdan chiqarildingiz.", authStartKeyboard);
+        } catch(e) {}
+      }, 20000);
     }
 
-    try {
-      await bot.sendMessage(targetChatId, "🚫 <b>Siz admin tomonidan botdan vaqtincha chiqarildingiz!</b>", { parse_mode: 'HTML', ...authStartKeyboard });
-    } catch(e) {}
-
-    return bot.sendMessage(chatId, `🚫 <b>${escapeHTML(userAcc ? userAcc.fullName : 'Foydalanuvchi')} botdan vaqtincha chiqarildi (kick qilindi).</b>`, { parse_mode: 'HTML', ...adminKeyboard });
+    return bot.sendMessage(chatId, `✅ <b>Foydalanuvchiga 20 sekundlik ogohlantirish yuborildi.</b>`, { parse_mode: 'HTML', ...adminKeyboard });
   }
 
   if (data.startsWith('ban_user_')) {
@@ -980,7 +1006,7 @@ bot.on('callback_query', async (query) => {
     if (userAcc) {
       if (userAcc.chatId) {
         try {
-          await bot.sendMessage(userAcc.chatId, "🚫 <b>Sizning akkauntingiz admin tomonidan butunlay o'chirildi va taqiqlandi!</b>", authStartKeyboard);
+          await bot.sendMessage(userAcc.chatId, "🚫 <b>Sizning akkauntingiz admin tomonidan butunlay o'chirildi va taqiqlandi!</b>", { parse_mode: 'HTML', ...authStartKeyboard });
         } catch(e) {}
       }
       delete userDataStore[userKey];
