@@ -295,11 +295,50 @@ function getCoursesPageInlineKeyboard(page = 1) {
   return { inline_keyboard: inlineButtons };
 }
 
+// GURUHGA BOT QO'SHILGANDA ISHLAYDIGAN EVENT
+bot.on('new_chat_members', async (msg) => {
+  const chatId = msg.chat.id;
+  const newMembers = msg.new_chat_members;
+
+  // Qo'shilgan a'zolar orasida bizning bot bor-yo'qligini tekshiramiz
+  const botUser = await bot.getMe();
+  const isBotAdded = newMembers.some(member => member.id === botUser.id);
+
+  if (isBotAdded) {
+    const welcomeGroupText = 
+      `🌟 <b>Assalomu alaykum, hurmatli guruh a'zolari!</b>\n\n` +
+      `Siz o'qituvchi yoki bilimga chanqoq o'quvchimisiz? Unda sizni <b>"Intellekt Online Kurs"</b> platformamizga lutfan taklif etamiz! 🚀\n\n` +
+      `⚡️ <b>Diqqat:</b> Bu bot faqat <b>O'qituvchilar va O'quvchilar</b> uchun mo'ljallangan.\n\n` +
+      `Siz bu yerda eng so'nggi zamonaviy kurslarni topishingiz va bilimingizni oshirishingiz mumkin. Pastdagi tugmani bosib botga o'ting!`;
+
+    try {
+      const sentMsg = await bot.sendMessage(chatId, welcomeGroupText, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🚀 Botga kirish (Boshlash)", url: `https://t.me/${botUser.username}?start=group_invite` }]
+          ]
+        }
+      });
+
+      // Xabarni guruhda pin (sanchib) qilib qo'yish
+      await bot.pinChatMessage(chatId, sentMsg.message_id);
+    } catch (e) {
+      console.error("Guruhga xabar yuborishda yoki pin qilishda xatolik:", e.message);
+    }
+  }
+});
+
 // BOT MESSAGE HANDLER
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text || '';
   const msgId = msg.message_id;
+
+  // Guruh xabarlariga boshqa buyruqlar xalaqit bermasligi uchun tekshirish
+  if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') {
+    return;
+  }
 
   const savedUser = getUserByChatId(chatId);
 
@@ -350,7 +389,7 @@ bot.on('message', async (msg) => {
     );
   }
 
-  if (text === '❌ Bekor qilish' || text === '/start') {
+  if (text === '❌ Bekor qilish' || text.startsWith('/start')) {
     await clearTempMessages(chatId);
     delete userSteps[chatId];
     delete tempCourseData[chatId];
@@ -915,7 +954,6 @@ bot.on('callback_query', async (query) => {
 
     delete tempRegData[chatId];
 
-    // Obuna bo'lmagan bo'lsa, xabarga inline-kanal tugmalarini ulaydi
     const isSubbed = await checkSub(chatId);
     if (!isSubbed) {
       return sendSubMessage(chatId, welcomeHeader);
@@ -975,7 +1013,7 @@ bot.on('callback_query', async (query) => {
     const userAcc = allUsers.find(u => u.chatId === targetChatId);
 
     if (userAcc) {
-      userAcc.kickUntil = Date.now() + (2 * 24 * 60 * 60 * 1000); // 2 kunlik vaqt
+      userAcc.kickUntil = Date.now() + (2 * 24 * 60 * 60 * 1000);
       saveUsersData();
 
       try {
@@ -986,7 +1024,6 @@ bot.on('callback_query', async (query) => {
         );
       } catch(e) {}
 
-      // 20 sekunddan keyin botdan chopish
       setTimeout(async () => {
         try {
           userAcc.chatId = null;
