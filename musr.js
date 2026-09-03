@@ -26,7 +26,7 @@ app.listen(PORT, () => {
 });
 
 const TOKEN = process.env.BOT_TOKEN || "8753920376:AAGUONfs4dmXPy-EjsaTYtZ8ZLgaBPkDiJc"; 
-const ADMIN_IDS = [8299255756, 5631424867];
+const ADMIN_IDS = [8299255756, 5631424867,7824469190];
 const REQUIRED_CHANNEL = "@intelekt_oquv_markazi";
 const COURSES_PER_PAGE = 5;
 
